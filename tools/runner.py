@@ -421,6 +421,9 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 
                 # NOTE: DEBUG SAVE
                 # sample from 10518
+                if not os.path.exists(os.path.join(args.experiment_path, 'obj_output')):
+                    os.mkdir(os.path.join(args.experiment_path, 'obj_output'))
+                
                 misc.save_tensor_to_obj(partial, os.path.join(args.experiment_path, 'obj_output', f'{model_id}_{idx:03d}_input.obj'))
                 misc.save_tensor_to_obj(coarse_points, os.path.join(args.experiment_path, 'obj_output', f'{model_id}_{idx:03d}_sparse.obj'))
                 misc.save_tensor_to_obj(dense_points, os.path.join(args.experiment_path, 'obj_output', f'{model_id}_{idx:03d}_output.obj'))
