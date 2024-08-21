@@ -152,3 +152,4 @@ inference_result/
 # add by zhangjinyu
 demo/sarnet/
 tmp/
+ckpts/
