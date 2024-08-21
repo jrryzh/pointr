@@ -22,7 +22,7 @@ The overall directory structure should be:
 ```
 **ShapeNet55/34 Dataset and Projected-ShapeNet55/34**: You can download the processed ShapeNet55/34 dataset at [[BaiduCloud](https://pan.baidu.com/s/16Q-GsEXEHkXRhmcSZTY86A)] (code:le04) or [[Google Drive](https://drive.google.com/file/d/1jUB5yD7DP97-EqqU2A9mmr61JpNwZBVK/view?usp=sharing)], Unzip the file under `ShapeNet55-34/`.
 
-You can download the processed Projected-ShapeNet55/34 dataset at [[BaiduCloud](https://pan.baidu.com/s/14ei-HClbLr_5-xAG-00BHg?pwd=dycc)(code:dycc), unzip the file under `ShapeNet55-34/`, `cat project_shapenet_pcd.tar* | tar xvf`.
+You can download the processed Projected-ShapeNet55/34 dataset at [[BaiduCloud](https://pan.baidu.com/s/14ei-HClbLr_5-xAG-00BHg?pwd=dycc)(code:dycc), unzip the file under `ShapeNet55-34/`, `cat project_shapenet_pcd.tar* | tar -xvf -`.
 The directory structure should be:
 ```
 │ShapeNet55-34/

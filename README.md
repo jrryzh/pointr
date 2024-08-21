@@ -99,11 +99,7 @@ ${POINTR_CONFIG_FILE} ${POINTR_CHECKPOINT_FILE} \
 
 For example, inference all samples under `demo/` and save the results under `inference_result/`
 ```
-python tools/inference.py \
-cfgs/PCN_models/AdaPoinTr.yaml ckpts/AdaPoinTr_PCN.pth \
---pc_root demo/ \ 
---save_vis_img  \
---out_pc_root inference_result/ \
+python tools/inference.py --pc_root demo/ --save_vis_img --out_pc_root inference_result/ cfgs/PCN_models/AdaPoinTr.yaml ckpts/AdaPoinTr_PCN.pth
 ```
 
 ### Evaluation
@@ -138,6 +134,10 @@ bash ./scripts/test.sh 0 \
     --config ./cfgs/ShapeNet55_models/PoinTr.yaml \
     --mode easy \
     --exp_name example
+
+bash ./scripts/test.sh 0 --ckpts ./ckpts/pointr_training_from_scratch_c55_best.pth --config ./cfgs/ShapeNet55_models/PoinTr.yaml --mode easy --exp_name test_original_weights_ptr_shapenet55
+
+bash ./scripts/test.sh 1 --ckpts ./ckpts/pointr_training_from_scratch_c55_best.pth --config ./cfgs/Rotated_ShapeNet55_models/PoinTr.yaml --mode easy --exp_name test_original_weights_on_rotates_ptr_shapenet55
 ```
 Test the PoinTr pretrained model on the KITTI benchmark:
 ```

@@ -1,0 +1,6 @@
+NAME: Sapien_ShapeNet
+N_POINTS: 8192
+N_RENDERINGS: 300
+PARTIAL_POINTS_PATH: /mnt/test/data/shapenet/shapenetcorev2_render_output2/
+INSTANCE_PATH: /mnt/test/data/shapenet/flipped/
+CARS: FALSE

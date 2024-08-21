@@ -16,6 +16,8 @@ class IO:
             return cls._read_h5(file_path)
         elif file_extension in ['.txt']:
             return cls._read_txt(file_path)
+        elif file_extension in ['.obj']:
+            return cls._read_obj(file_path)
         else:
             raise Exception('Unsupported file extension: %s' % file_extension)
 
@@ -40,3 +42,12 @@ class IO:
     def _read_h5(cls, file_path):
         f = h5py.File(file_path, 'r')
         return f['data'][()]
+    
+    @classmethod
+    def _read_obj(cls, file_path):
+        vertices = []
+        with open(file_path, 'r') as f:
+            for line in f:
+                if line.startswith('v '):
+                    vertices.append(list(map(float, line.strip().split()[1:4])))
+        return np.array(vertices)

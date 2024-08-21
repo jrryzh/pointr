@@ -94,7 +94,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
             data_time.update(time.time() - batch_start_time)
             npoints = config.dataset.train._base_.N_POINTS
             dataset_name = config.dataset.train._base_.NAME
-            if dataset_name == 'PCN' or dataset_name == 'Completion3D' or dataset_name == 'Projected_ShapeNet':
+            if dataset_name == 'PCN' or dataset_name == 'Completion3D' or dataset_name == 'Projected_ShapeNet' or dataset_name == 'Sapien_ShapeNet':
                 partial = data[0].cuda()
                 gt = data[1].cuda()
                 if config.dataset.train._base_.CARS:
@@ -199,7 +199,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
 
             npoints = config.dataset.val._base_.N_POINTS
             dataset_name = config.dataset.val._base_.NAME
-            if dataset_name == 'PCN' or dataset_name == 'Completion3D' or dataset_name == 'Projected_ShapeNet':
+            if dataset_name == 'PCN' or dataset_name == 'Completion3D' or dataset_name == 'Projected_ShapeNet' or dataset_name == 'Sapien_ShapeNet':
                 partial = data[0].cuda()
                 gt = data[1].cuda()
             elif dataset_name == 'ShapeNet':
@@ -372,7 +372,7 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                     category_metrics[taxonomy_id] = AverageMeter(Metrics.names())
                 category_metrics[taxonomy_id].update(_metrics)
 
-            elif dataset_name == 'ShapeNet':
+            elif dataset_name == 'ShapeNet' or dataset_name == "Rotated_ShapeNet":
                 gt = data.cuda()
                 choice = [torch.Tensor([1,1,1]),torch.Tensor([1,1,-1]),torch.Tensor([1,-1,1]),torch.Tensor([-1,1,1]),
                             torch.Tensor([-1,-1,1]),torch.Tensor([-1,1,-1]), torch.Tensor([1,-1,-1]),torch.Tensor([-1,-1,-1])]
@@ -418,6 +418,15 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 print_log('Test[%d/%d] Taxonomy = %s Sample = %s Losses = %s Metrics = %s' %
                             (idx + 1, n_samples, taxonomy_id, model_id, ['%.4f' % l for l in test_losses.val()], 
                             ['%.4f' % m for m in _metrics]), logger=logger)
+                
+                # NOTE: DEBUG SAVE
+                # sample from 10518
+                misc.save_tensor_to_obj(partial, os.path.join(args.experiment_path, 'obj_output', f'{model_id}_{idx:03d}_input.obj'))
+                misc.save_tensor_to_obj(coarse_points, os.path.join(args.experiment_path, 'obj_output', f'{model_id}_{idx:03d}_sparse.obj'))
+                misc.save_tensor_to_obj(dense_points, os.path.join(args.experiment_path, 'obj_output', f'{model_id}_{idx:03d}_output.obj'))
+                misc.save_tensor_to_obj(gt, os.path.join(args.experiment_path, 'obj_output', f'{model_id}_{idx:03d}_gt.obj'))
+                
+            
         if dataset_name == 'KITTI':
             return
         for _,v in category_metrics.items():

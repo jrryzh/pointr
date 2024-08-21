@@ -271,7 +271,13 @@ def random_scale(partial, gt, scale_range=[0.8, 1.2]):
     scale = torch.rand(1).cuda() * (scale_range[1] - scale_range[0]) + scale_range[0]
     return partial * scale, gt * scale
 
-
+def save_tensor_to_obj(points, path):
+    """保存点云数据为 .obj 文件"""
+    points = points.squeeze(0).cpu().numpy()
+    
+    with open(path, 'w') as file:
+        for point in points:
+            file.write(f"v {point[0]} {point[1]} {point[2]}\n")
 
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.lr_scheduler import ReduceLROnPlateau
