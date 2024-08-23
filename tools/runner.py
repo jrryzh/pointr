@@ -10,6 +10,9 @@ from utils.AverageMeter import AverageMeter
 from utils.metrics import Metrics
 from extensions.chamfer_dist import ChamferDistanceL1, ChamferDistanceL2
 
+import json
+shapenet_dict = json.load(open('./data/shapenet_synset_dict.json', 'r'))
+
 def run_net(args, config, train_writer=None, val_writer=None):
     logger = get_logger(args.log_name)
     # build dataset
@@ -419,15 +422,18 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                             (idx + 1, n_samples, taxonomy_id, model_id, ['%.4f' % l for l in test_losses.val()], 
                             ['%.4f' % m for m in _metrics]), logger=logger)
                 
-                # NOTE: DEBUG SAVE
+                ################## NOTE: DEBUG SAVE ####################
                 # sample from 10518
                 if not os.path.exists(os.path.join(args.experiment_path, 'obj_output')):
                     os.mkdir(os.path.join(args.experiment_path, 'obj_output'))
                 
-                misc.save_tensor_to_obj(partial, os.path.join(args.experiment_path, 'obj_output', f'{model_id}_{idx:03d}_input.obj'))
-                misc.save_tensor_to_obj(coarse_points, os.path.join(args.experiment_path, 'obj_output', f'{model_id}_{idx:03d}_sparse.obj'))
-                misc.save_tensor_to_obj(dense_points, os.path.join(args.experiment_path, 'obj_output', f'{model_id}_{idx:03d}_output.obj'))
-                misc.save_tensor_to_obj(gt, os.path.join(args.experiment_path, 'obj_output', f'{model_id}_{idx:03d}_gt.obj'))
+                
+                misc.save_tensor_to_obj(partial, os.path.join(args.experiment_path, 'obj_output', f'{shapenet_dict[taxonomy_id]}_{model_id}_{idx:03d}_input.obj'))
+                misc.save_tensor_to_obj(coarse_points, os.path.join(args.experiment_path, 'obj_output', f'{shapenet_dict[taxonomy_id]}_{model_id}_{idx:03d}_sparse.obj'))
+                misc.save_tensor_to_obj(dense_points, os.path.join(args.experiment_path, 'obj_output', f'{shapenet_dict[taxonomy_id]}_{model_id}_{idx:03d}_output.obj'))
+                misc.save_tensor_to_obj(gt, os.path.join(args.experiment_path, 'obj_output', f'{shapenet_dict[taxonomy_id]}_{model_id}_{idx:03d}_gt.obj'))
+                
+                ############################################################
                 
             
         if dataset_name == 'KITTI':
@@ -439,7 +445,7 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
      
 
     # Print testing results
-    shapenet_dict = json.load(open('./data/shapenet_synset_dict.json', 'r'))
+    # shapenet_dict = json.load(open('./data/shapenet_synset_dict.json', 'r'))
     print_log('============================ TEST RESULTS ============================',logger=logger)
     msg = ''
     msg += 'Taxonomy\t'
