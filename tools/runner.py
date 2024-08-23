@@ -350,7 +350,7 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
 
             npoints = config.dataset.test._base_.N_POINTS
             dataset_name = config.dataset.test._base_.NAME
-            if dataset_name == 'PCN' or dataset_name == 'Projected_ShapeNet':
+            if dataset_name == 'PCN' or dataset_name == 'Projected_ShapeNet' or dataset_name == "PartialSpace_ShapeNet":
                 partial = data[0].cuda()
                 gt = data[1].cuda()
 
@@ -412,7 +412,7 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 )
                 continue
             else:
-                raise NotImplementedError(f'Train phase do not support {dataset_name}')
+                raise NotImplementedError(f'Test phase do not support {dataset_name}')
 
             if (idx+1) % 200 == 0:
                 print_log('Test[%d/%d] Taxonomy = %s Sample = %s Losses = %s Metrics = %s' %
