@@ -135,9 +135,6 @@ bash ./scripts/test.sh 0 \
     --mode easy \
     --exp_name example
 
-bash ./scripts/test.sh 0 --ckpts ./ckpts/pointr_training_from_scratch_c55_best.pth --config ./cfgs/ShapeNet55_models/PoinTr.yaml --mode easy --exp_name test_original_weights_ptr_shapenet55
-
-bash ./scripts/test.sh 1 --ckpts ./ckpts/pointr_training_from_scratch_c55_best.pth --config ./cfgs/Rotated_ShapeNet55_models/PoinTr.yaml --mode easy --exp_name test_original_weights_on_rotates_ptr_shapenet55
 ```
 Test the PoinTr pretrained model on the KITTI benchmark:
 ```

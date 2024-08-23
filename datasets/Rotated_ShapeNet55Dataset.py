@@ -9,13 +9,13 @@ import random
 
 from scipy.spatial.transform import Rotation as R
 
-def generate_random_rotation_matrix(max_angle_degrees=30):
+def generate_random_rotation_matrix(min_angle_degrees=30, max_angle_degrees=60):
     # 生成一个随机的旋转轴
     axis = np.random.randn(3)
     axis /= np.linalg.norm(axis)
     
-    # 在 -max_angle_degrees 到 max_angle_degrees 范围内生成一个随机角度
-    angle = np.random.uniform(-max_angle_degrees, max_angle_degrees)
+    # 在 min_angle_degrees 到 max_angle_degrees 范围内生成一个随机角度
+    angle = np.random.uniform(min_angle_degrees, max_angle_degrees)
     angle_radians = np.deg2rad(angle)
     
     # 使用 scipy.spatial.transform.Rotation 生成旋转矩阵
@@ -65,7 +65,7 @@ class Rotated_ShapeNet(data.Dataset):
         data = self.pc_norm(data)
         
         # 生成随机旋转矩阵
-        rot_matrix = generate_random_rotation_matrix(max_angle_degrees=30)
+        rot_matrix = generate_random_rotation_matrix(min_angle_degrees=0, max_angle_degrees=30)
                 
         # 应用旋转矩阵到点云数据上
         data = np.dot(data, rot_matrix.T)

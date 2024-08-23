@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import os
 from collections import abc
 from pointnet2_ops import pointnet2_utils
+import math
 
 def jitter_points(pc, std=0.01, clip=0.05):
     bsize = pc.size()[0]
@@ -147,7 +148,56 @@ class BNMomentumScheduler(object):
             epoch = self.last_epoch + 1
         return self.lmbd(epoch)
 
+def ndarray_seprate_point_cloud(xyz, num_points, crop, fixed_points = None, padding_zeros = False):
+    '''
+    Separate point cloud: usage: using to generate the incomplete point cloud with a set number of points.
 
+    参数:
+    - xyz: NumPy 数组，形状为 (N, 3)，表示点云的坐标。
+    - num_points: 总共的点数。
+    - crop: 需要裁剪的点的数量，可以是整数或范围 (列表)。
+    - fixed_points: 固定点，可以是一个点或多个点。
+    - padding_zeros: 如果为 True，用零填充裁剪出来的部分。
+
+    返回值:
+    - input_data: NumPy 数组，形状为 (N - crop, 3)，表示裁剪后的点云。
+    - crop_data: NumPy 数组，形状为 (crop, 3)，表示裁剪出来部分的点云。
+    '''
+    n, c = xyz.shape
+
+    assert n == num_points
+    assert c == 3
+    if crop == num_points:
+        return xyz, None
+    
+    if isinstance(crop, list):
+        num_crop = random.randint(crop[0], crop[1])
+    else:
+        num_crop = crop
+
+    if fixed_points is None: 
+        center = np.random.randn(3)
+        center = center / np.linalg.norm(center)
+    else:
+        if isinstance(fixed_points, list):
+            fixed_point = random.sample(fixed_points, 1)[0]
+        else:
+            fixed_point = fixed_points
+        center = np.asarray(fixed_point).reshape(3)
+    
+    distance_matrix = np.linalg.norm(center.reshape(1, 3) - xyz, axis=1)  # (2048,)
+
+    idx = np.argsort(distance_matrix)  # (2048,)
+
+    if padding_zeros:
+        input_data = xyz.copy()
+        input_data[idx[:num_crop]] = 0
+    else:
+        input_data = xyz.copy()[idx[num_crop:]]
+
+    crop_data = xyz.copy()[idx[:num_crop]]
+
+    return input_data, crop_data
 
 def seprate_point_cloud(xyz, num_points, crop, fixed_points = None, padding_zeros = False):
     '''
@@ -227,6 +277,125 @@ def get_ptcloud_img(ptcloud):
     return img
 
 
+def uint(v):
+    norm = np.linalg.norm(v)
+    if norm == 0:
+        return v
+    return  v/ norm
+
+def semi_sphere_generate_samples(samples=300, distance=5):
+    RTs = [] # pose transform matrix
+    # golden angle in radians
+    phi = math.pi * (math.sqrt(5.) - 1.)  
+    for i in range(samples): # num -> samples
+        # y goes from 1 to -1 -> 0 to 1
+        # y = 1 - (i / float(samples - 1)) * 2  
+        # y goes from 0 to 1
+        z = i / float(samples - 1) if i / float(samples - 1)<1 else 1-1e-10 
+        radius = math.sqrt(1 - z * z)  # radius at y
+
+        theta = phi * i  # golden angle increment
+
+        x = math.cos(theta) * radius
+        y = math.sin(theta) * radius
+        cam_pos = np.array([x, y, z]) * distance
+        # cam_pos = np.array([-2, -2, -3])
+        # print(cam_pos)
+
+        axisX = -cam_pos.copy()
+        axisZ = np.array([0,0,1])
+        axisY = np.cross(axisZ, axisX)
+        axisZ = np.cross(axisX, axisY)
+
+        cam_mat = np.array([uint(axisX), uint(axisY), uint(axisZ)])
+
+        obj_RT = np.eye(4,4)
+        obj_RT[:3, :3] = cam_mat.T
+        obj_RT[:3, 3] = cam_pos
+
+        RTs.append(obj_RT)
+
+    return np.stack(RTs)
+
+def transform_point_cloud_to_camera_frame(point_cloud, RT):
+    """
+    将点云从全局坐标系转换为相机坐标系
+
+    参数:
+    - point_cloud: numpy 数组，形状为 (N, 3)，表示 N 个点的坐标。
+    - RT: 4x4 转换矩阵。
+
+    返回值:
+    - transformed_point_cloud: numpy 数组，形状为 (N, 3)，表示在相机坐标系中的点云。
+    """
+    R = RT[:3, :3]
+    T = RT[:3, 3]
+    
+    # 计算旋转矩阵的转置
+    R_inv = R.T
+    
+    # 计算平移的逆
+    T_inv = -R_inv @ T
+    
+    # 创建一个新的点云列表以存储结果
+    transformed_point_cloud = []
+
+    for p in point_cloud:
+        # 对每个点应用变换
+        p_cam = R_inv @ (p - T)
+        transformed_point_cloud.append(p_cam)
+        
+    return np.array(transformed_point_cloud)
+
+def tensor_transform_point_cloud_to_camera_frame(point_cloud, RT):
+    """
+    将点云从全局坐标系转换为相机坐标系
+
+    参数:
+    - point_cloud: torch 张量，形状为 (N, 3)，表示 N 个点的坐标。
+    - RT: 4x4 转换矩阵，torch 张量。
+
+    返回值:
+    - transformed_point_cloud: torch 张量，形状为 (N, 3)，表示在相机坐标系中的点云。
+    """
+    R = RT[:3, :3]
+    T = RT[:3, 3]
+    
+    # 计算旋转矩阵的转置
+    R_inv = R.t()  # PyTorch 中的转置操作
+    
+    # 计算平移的逆
+    T_inv = -R_inv @ T  # @ 是矩阵乘法
+    
+    # 将点云从全局坐标系转换到相机坐标系
+    # 首先，需要将单个点云的每个点进行减去T
+    point_cloud_transformed = point_cloud - T
+    
+    # 然后将结果乘以转置的旋转矩阵R_inv
+    transformed_point_cloud = R_inv @ point_cloud_transformed.t()
+    
+    # 转置结果以返回形状为 (N, 3) 的张量
+    return transformed_point_cloud.t()
+
+def pc_normalize(pc):
+    """ pc: NxC, return NxC """
+    l = pc.shape[0]
+    centroid = np.mean(pc, axis=0)
+    pc = pc - centroid
+    scale = np.max(np.sqrt(np.sum(pc ** 2, axis=1)))
+    pc = pc / scale
+    return pc, centroid, scale
+
+def tensor_pc_normalize(pc):
+    """ 
+    pc: NxC Tensor, return NxC Tensor
+    """
+    l = pc.shape[0]
+    centroid = torch.mean(pc, dim=0)
+    pc = pc - centroid
+    scale = torch.max(torch.sqrt(torch.sum(pc**2, dim=1)))
+    pc = pc / scale
+    return pc, centroid, scale
 
 def visualize_KITTI(path, data_list, titles = ['input','pred'], cmap=['bwr','autumn'], zdir='y', 
                          xlim=(-1, 1), ylim=(-1, 1), zlim=(-1, 1) ):
