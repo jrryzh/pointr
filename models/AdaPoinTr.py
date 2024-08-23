@@ -841,19 +841,19 @@ class PCTransformer(nn.Module):
         pe =  self.pos_embed(coor)
         x = self.input_proj(f)
 
-        x = self.encoder(x + pe, coor) # b n c
-        global_feature = self.increase_dim(x) # B 1024 N 
-        global_feature = torch.max(global_feature, dim=1)[0] # B 1024
+        x = self.encoder(x + pe, coor) # b n c # 这里encoder就是self attention
+        global_feature = self.increase_dim(x) # B 1024 N # 提升到global_feature_dim
+        global_feature = torch.max(global_feature, dim=1)[0] # B 1024 # max后变为1024维
 
-        coarse = self.coarse_pred(global_feature).reshape(bs, -1, 3)
+        coarse = self.coarse_pred(global_feature).reshape(bs, -1, 3) # global feature直接输出coarse points
 
         coarse_inp = misc.fps(xyz, self.num_query//2) # B 128 3
         coarse = torch.cat([coarse, coarse_inp], dim=1) # B 224+128 3?
 
-        mem = self.mem_link(x)
+        mem = self.mem_link(x) # mem来自于encoder输出
 
         # query selection
-        query_ranking = self.query_ranking(coarse) # b n 1
+        query_ranking = self.query_ranking(coarse) # b n 1 # query ranking是什么？ 线性层+sigmoid
         idx = torch.argsort(query_ranking, dim=1, descending=True) # b n 1
         coarse = torch.gather(coarse, 1, idx[:,:self.num_query].expand(-1, -1, coarse.size(-1)))
 
