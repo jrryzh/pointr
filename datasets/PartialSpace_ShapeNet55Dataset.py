@@ -33,14 +33,25 @@ class PartialSpace_ShapeNet(data.Dataset):
             
             camera_poses = misc.semi_sphere_generate_samples(100, 5)
             
-            for pose in camera_poses:
-            
-                self.file_list.append({
-                    'taxonomy_id': taxonomy_id,
-                    'model_id': model_id,
-                    'file_path': line,
-                    'pose': pose
-                })
+            if self.subset == "train":
+                for pose in camera_poses:
+                    self.file_list.append({
+                        'taxonomy_id': taxonomy_id,
+                        'model_id': model_id,
+                        'file_path': line,
+                        'pose': pose
+                    })
+                    
+            elif self.subset == "test":
+                sample_poses = camera_poses[::10]
+                for pose in sample_poses:
+                    self.file_list.append({
+                        'taxonomy_id': taxonomy_id,
+                        'model_id': model_id,
+                        'file_path': line,
+                        'pose': pose
+                    })
+                    
         
         print(f'[DATASET] {len(self.file_list)} instances were loaded')
         
