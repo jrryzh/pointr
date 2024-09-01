@@ -153,3 +153,5 @@ inference_result/
 demo/sarnet/
 tmp/
 ckpts/
+tests/input/
+tests/output/

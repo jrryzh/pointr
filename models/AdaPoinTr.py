@@ -845,7 +845,7 @@ class PCTransformer(nn.Module):
         global_feature = self.increase_dim(x) # B 1024 N # 提升到global_feature_dim
         global_feature = torch.max(global_feature, dim=1)[0] # B 1024 # max后变为1024维
 
-        coarse = self.coarse_pred(global_feature).reshape(bs, -1, 3) # global feature直接输出coarse points
+        coarse = self.coarse_pred(global_feature).reshape(bs, -1, 3) # global feature直接输出coarse points 两层mlp（让我想是否可以mlp出pose mat）
 
         coarse_inp = misc.fps(xyz, self.num_query//2) # B 128 3
         coarse = torch.cat([coarse, coarse_inp], dim=1) # B 224+128 3?
