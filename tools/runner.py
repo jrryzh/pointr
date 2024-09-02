@@ -219,7 +219,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
     print_log(f"[VALIDATION] Start validating epoch {epoch}", logger = logger)
     base_model.eval()  # set model to eval mode
 
-    test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2'])
+    test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2', 'RotateLoss'])
     test_metrics = AverageMeter(Metrics.names())
     category_metrics = dict()
     n_samples = len(test_dataloader) # bs is 1
@@ -243,7 +243,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
             elif dataset_name == 'PartialSpace_ShapeNet':
                 partial = data[0].cuda()
                 gt = data[1].cuda()
-                pose = data[2].cuda()
+                gt_rotate_mat = data[2].cuda()
 
             else:
                 raise NotImplementedError(f'Test phase do not support {dataset_name}')
@@ -251,7 +251,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
             ret = base_model(partial)
             coarse_points = ret[0]
             dense_points = ret[1]
-            rotation_matrix = ret[2]
+            rotate_mat = ret[2]
 
             sparse_loss_l1 =  ChamferDisL1(coarse_points, gt)
             sparse_loss_l2 =  ChamferDisL2(coarse_points, gt)
@@ -259,8 +259,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
             dense_loss_l2 =  ChamferDisL2(dense_points, gt)
             
             ############### rotate matrix loss ################
-            rotat_mat_loss = nn.HuberLoss(rotation_matrix, pose)
-            
+            rotat_mat_loss = nn.HuberLoss()(rotate_mat, gt_rotate_mat)
             ##################################################
 
             if args.distributed:

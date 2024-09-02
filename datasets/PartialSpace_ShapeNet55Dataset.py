@@ -32,7 +32,7 @@ class PartialSpace_ShapeNet(data.Dataset):
             model_id = line.split('-')[1].split('.')[0]
             
             # DEBUG sample 1
-            camera_poses = misc.semi_sphere_generate_samples(2, 5) # 100
+            camera_poses = misc.semi_sphere_generate_samples(100, 5) # 100
             
             if self.subset == "train":
                 for pose in camera_poses:
@@ -53,6 +53,8 @@ class PartialSpace_ShapeNet(data.Dataset):
                         'pose': pose
                     })
         
+        # # DEBUG
+        # self.file_list = self.file_list[:300]
         
         print(f'[DATASET] {len(self.file_list)} instances were loaded')
         
