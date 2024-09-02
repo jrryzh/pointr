@@ -276,6 +276,51 @@ def get_ptcloud_img(ptcloud):
     img = img.reshape(fig.canvas.get_width_height()[::-1] + (3, ))
     return img
 
+#################### my utils ############################
+def rotation_matrix_to_quaternion(R):
+    """
+    Convert a 3x3 rotation matrix to a quaternion.
+    
+    Args:
+    - R: A 3x3 rotation matrix
+
+    Returns:
+    - q: A quaternion (w, x, y, z)
+    """
+    assert R.shape == (3, 3), "Rotation matrix should be 3x3"
+
+    m00, m01, m02 = R[0, 0], R[0, 1], R[0, 2]
+    m10, m11, m12 = R[1, 0], R[1, 1], R[1, 2]
+    m20, m21, m22 = R[2, 0], R[2, 1], R[2, 2]
+
+    trace = m00 + m11 + m22
+
+    if trace > 0:
+        s = 0.5 / np.sqrt(trace + 1.0)
+        qw = 0.25 / s
+        qx = (m21 - m12) * s
+        qy = (m02 - m20) * s
+        qz = (m10 - m01) * s
+    elif (m00 > m11) and (m00 > m22):
+        s = 2.0 * np.sqrt(1.0 + m00 - m11 - m22)
+        qw = (m21 - m12) / s
+        qx = 0.25 * s
+        qy = (m01 + m10) / s
+        qz = (m02 + m20) / s
+    elif m11 > m22:
+        s = 2.0 * np.sqrt(1.0 + m11 - m00 - m22)
+        qw = (m02 - m20) / s
+        qx = (m01 + m10) / s
+        qy = 0.25 * s
+        qz = (m12 + m21) / s
+    else:
+        s = 2.0 * np.sqrt(1.0 + m22 - m00 - m11)
+        qw = (m10 - m01) / s
+        qx = (m02 + m20) / s
+        qy = (m12 + m21) / s
+        qz = 0.25 * s
+
+    return np.array([qw, qx, qy, qz])
 
 def uint(v):
     norm = np.linalg.norm(v)
@@ -396,6 +441,7 @@ def tensor_pc_normalize(pc):
     scale = torch.max(torch.sqrt(torch.sum(pc**2, dim=1)))
     pc = pc / scale
     return pc, centroid, scale
+#################### my utils ############################
 
 def visualize_KITTI(path, data_list, titles = ['input','pred'], cmap=['bwr','autumn'], zdir='y', 
                          xlim=(-1, 1), ylim=(-1, 1), zlim=(-1, 1) ):

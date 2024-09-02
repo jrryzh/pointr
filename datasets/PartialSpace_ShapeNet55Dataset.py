@@ -31,7 +31,8 @@ class PartialSpace_ShapeNet(data.Dataset):
             taxonomy_id = line.split('-')[0]
             model_id = line.split('-')[1].split('.')[0]
             
-            camera_poses = misc.semi_sphere_generate_samples(100, 5)
+            # DEBUG sample 1
+            camera_poses = misc.semi_sphere_generate_samples(2, 5) # 100
             
             if self.subset == "train":
                 for pose in camera_poses:
@@ -51,7 +52,7 @@ class PartialSpace_ShapeNet(data.Dataset):
                         'file_path': line,
                         'pose': pose
                     })
-                    
+        
         
         print(f'[DATASET] {len(self.file_list)} instances were loaded')
         
@@ -72,7 +73,10 @@ class PartialSpace_ShapeNet(data.Dataset):
         data['partial'], centroid, scale = misc.pc_normalize(_partial_pc)
         data['gt'] = (_complete_pc - centroid) / scale
         
-        return sample['taxonomy_id'], sample['model_id'], (data['partial'].astype(np.float32), data['gt'].astype(np.float32))
+        # calucate rotate
+        rotate_mat = misc.rotation_matrix_to_quaternion(sample['pose'][:3, :3])
+        
+        return sample['taxonomy_id'], sample['model_id'], (data['partial'].astype(np.float32), data['gt'].astype(np.float32), rotate_mat.astype(np.float32))
 
     def __len__(self):
         return len(self.file_list)
