@@ -985,11 +985,17 @@ class AdaPoinTr_Pose(nn.Module):
             q,
             coarse_point_cloud], dim=-1)  # B M 1027 + C
 
-        # 添加rotation的预测
+        ############ 添加rotation的预测 ############ 
         if self.rotat_feature == "rebuild_feature":
             rotation_matrix = self.rotat_mat(rebuild_feature)
         elif self.rotat_feature == "global_feature":
             rotation_matrix = self.rotat_mat(global_feature)
+            
+        # 对rotation_matrix进行正则化
+        norm = torch.linalg.norm(rotation_matrix, dim=1, keepdim=True) + 1e-10
+        rotation_matrix = rotation_matrix / norm
+        ###########################################
+        
         
         # NOTE: foldingNet
         if self.decoder_type == 'fold':

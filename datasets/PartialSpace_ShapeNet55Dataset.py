@@ -10,8 +10,6 @@ import random
 from utils import misc
 from torch.utils.data import DataLoader
 
-
-
 @DATASETS.register_module()
 class PartialSpace_ShapeNet(data.Dataset):
     def __init__(self, config):
