@@ -390,7 +390,7 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
 
     base_model.eval()  # set model to eval mode
 
-    test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2'])
+    test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2', 'RotateLoss'])
     test_metrics = AverageMeter(Metrics.names())
     category_metrics = dict()
     n_samples = len(test_dataloader) # bs is 1
@@ -402,7 +402,7 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
 
             npoints = config.dataset.test._base_.N_POINTS
             dataset_name = config.dataset.test._base_.NAME
-            if dataset_name == 'PCN' or dataset_name == 'Projected_ShapeNet' or dataset_name == "PartialSpace_ShapeNet":
+            if dataset_name == 'PCN' or dataset_name == 'Projected_ShapeNet':
                 partial = data[0].cuda()
                 gt = data[1].cuda()
 
@@ -463,6 +463,37 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                     [partial[0].cpu(), dense_points[0].cpu()]
                 )
                 continue
+
+            elif dataset_name == "PartialSpace_ShapeNet":
+                partial = data[0].cuda()
+                gt = data[1].cuda()
+                gt_rotate_mat = data[2].cuda()
+
+                ret = base_model(partial)
+                coarse_points = ret[0]
+                dense_points = ret[1]
+                rotate_mat = ret[2]
+
+                sparse_loss_l1 =  ChamferDisL1(coarse_points, gt)
+                sparse_loss_l2 =  ChamferDisL2(coarse_points, gt)
+                dense_loss_l1 =  ChamferDisL1(dense_points, gt)
+                dense_loss_l2 =  ChamferDisL2(dense_points, gt)
+
+                ############### rotate matrix loss ################
+                rotat_mat_loss = nn.HuberLoss()(rotate_mat, gt_rotate_mat)
+                ##################################################
+                if config.model.NAME == "AdaPoinTr_Pose":
+                    test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000, rotat_mat_loss.item() * 1000])
+                else:
+                    test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000])
+                
+                _metrics = Metrics.get(dense_points, gt, require_emd=True)
+                # test_metrics.update(_metrics)
+
+                if taxonomy_id not in category_metrics:
+                    category_metrics[taxonomy_id] = AverageMeter(Metrics.names())
+                category_metrics[taxonomy_id].update(_metrics)                
+                
             else:
                 raise NotImplementedError(f'Test phase do not support {dataset_name}')
 

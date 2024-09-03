@@ -31,7 +31,7 @@ class PartialSpace_ShapeNet(data.Dataset):
             taxonomy_id = line.split('-')[0]
             model_id = line.split('-')[1].split('.')[0]
             
-            # DEBUG sample 1
+            # DEBUG sample 2
             camera_poses = misc.semi_sphere_generate_samples(100, 5) # 100
             
             if self.subset == "train":

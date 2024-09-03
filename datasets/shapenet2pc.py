@@ -9,11 +9,11 @@ import trimesh
 
 import json
 
-def sample_triangle(v, n=None):
+def sample_triangle(v, n=None):  #v.shape == (num, 2, 3)
     if hasattr(n, 'dtype'):
         n = np.asscalar(n)
     if n is None:
-        size = v.shape[:-2] + (2,)
+        size = v.shape[:-2] + (2,)   #shape == (num, 2) 也就是对于每一个triangle获得要得到在基为两条边的点的坐标
     elif isinstance(n, int):
         size = (n, 2)
     elif isinstance(n, tuple):
@@ -24,11 +24,11 @@ def sample_triangle(v, n=None):
         raise TypeError('n must be int, tuple or list, got %s' % str(n))
     assert(v.shape[-2] == 2)
     a = np.random.uniform(size=size)
-    mask = np.sum(a, axis=-1) > 1
-    a[mask] *= -1
-    a[mask] += 1
+    mask = np.sum(a, axis=-1) > 1     # 当在三角形之外时，反转回来
+    a[mask] *= -1                               
+    a[mask] += 1                                   
     a = np.expand_dims(a, axis=-1)
-    return np.sum(a*v, axis=-2)
+    return np.sum(a*v, axis=-2)      #获得标准坐标
 
 def sample_faces(vertices, faces, n_total):
     if len(faces) == 0:
@@ -45,12 +45,12 @@ def sample_faces(vertices, faces, n_total):
 
     positions = []
     last = 0
-    for i in range(n_faces):
+    for i in range(n_faces):               #从所有faces中，根据faces的面积按比例提取n_total个点
         n = cum_area[i] - last
         last = cum_area[i]
         if n > 0:
-            positions.append(d0[i] + sample_triangle(ds[i], n))
-    return np.concatenate(positions, axis=0)
+            positions.append(d0[i] + sample_triangle(ds[i], n))   #从每个face上提取比例个点
+    return np.concatenate(positions, axis=0) #把各个faces上的采样得到的点连起来
 
 def parse_obj_file(open_file):
     """
