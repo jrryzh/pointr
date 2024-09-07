@@ -61,7 +61,8 @@ model : {
       cross_attn_combine_style: 'concat',
     },
     pose_config: {
-      rotat_feature: 'rebuild_feature'
+      rotat_feature: 'rebuild_feature',
+      rotat_norm: True
     }
 }
   

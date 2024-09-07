@@ -924,31 +924,51 @@ class AdaPoinTr_Pose(nn.Module):
         self.reduce_map = nn.Linear(self.trans_dim + 1027, self.trans_dim)
         self.build_loss_func()
         
-        # 设计mlp
-        self.rotat_feature = "global_feature"
-        self.rotat_mat1 = nn.Sequential(
-            nn.Linear(self.trans_dim + 1027, 1024),
-            nn.GELU(),
+        # 区分用global feature还是每个点的feature
+        # self.rotat_feature = "global_feature"
+        # self.rotat_mat1 = nn.Sequential(
+        #     nn.Linear(self.trans_dim + 1027, 1024),
+        #     nn.GELU(),
+        #     nn.Linear(1024, 512),
+        #     nn.GELU(),
+        #     nn.Linear(512, 4)
+        # )
+        # self.rotat_mat2 = nn.Sequential(
+        #     nn.Linear(1024, 512),
+        #     nn.GELU(),
+        #     nn.Linear(512, 4),
+        # )
+        # if self.rotat_feature == "rebuild_feature":
+        #     self.rotat_mat = self.rotat_mat1
+        # elif self.rotat_feature == "global_feature":
+        #     self.rotat_mat = self.rotat_mat2
+        
+        ############# 添加分支预测 rotate trans size ############
+        self.rotat_head = nn.Sequential(
             nn.Linear(1024, 512),
             nn.GELU(),
-            nn.Linear(512, 4)
+            nn.Linear(512, 6),
         )
-        self.rotat_mat2 = nn.Sequential(
+        
+        self.trans_head = nn.Sequential(
             nn.Linear(1024, 512),
             nn.GELU(),
-            nn.Linear(512, 4),
+            nn.Linear(512, 3),
         )
-        if self.rotat_feature == "rebuild_feature":
-            self.rotat_mat = self.rotat_mat1
-        elif self.rotat_feature == "global_feature":
-            self.rotat_mat = self.rotat_mat2
+        
+        self.size_head = nn.Sequential(
+            nn.Linear(1024, 512),
+            nn.GELU(),
+            nn.Linear(512, 3),
+        )
+        #########################################################
 
     def build_loss_func(self):
         self.loss_func = ChamferDistanceL1()
 
-    def get_loss(self, ret, gt, gt_rotate_mat, epoch=1):
+    def get_loss(self, ret, gt, gt_rotat_mat, gt_trans_mat, gt_size_mat, epoch=1):
         
-        pred_coarse, denoised_coarse, denoised_fine, pred_fine, pred_rotat_mat = ret
+        pred_coarse, denoised_coarse, denoised_fine, pred_fine, pred_rotat_mat, pred_trans_mat, pred_size_mat = ret
         # import ipdb; ipdb.set_trace()
         
         assert pred_fine.size(1) == gt.size(1)
@@ -967,10 +987,11 @@ class AdaPoinTr_Pose(nn.Module):
         loss_recon = loss_coarse + loss_fine
         
         # pose loss
-        loss_rotat = nn.HuberLoss()(pred_rotat_mat, gt_rotate_mat)
+        loss_rotat = nn.SmoothL1Loss()(pred_rotat_mat, gt_rotat_mat)
+        loss_trans = nn.SmoothL1Loss()(pred_trans_mat, gt_trans_mat)
+        loss_size = nn.SmoothL1Loss()(pred_size_mat, gt_size_mat)
 
-        # import ipdb; ipdb.set_trace()
-        return loss_denoised, loss_recon, loss_rotat
+        return loss_denoised, loss_recon, loss_rotat, loss_trans, loss_size
 
     def forward(self, xyz):
         q, coarse_point_cloud, denoise_length = self.base_model(xyz) # B M C and B M 3
@@ -985,17 +1006,25 @@ class AdaPoinTr_Pose(nn.Module):
             q,
             coarse_point_cloud], dim=-1)  # B M 1027 + C
 
-        ############ 添加rotation的预测 ############ 
-        if self.rotat_feature == "rebuild_feature":
-            rotation_matrix = self.rotat_mat(rebuild_feature)
-        elif self.rotat_feature == "global_feature":
-            rotation_matrix = self.rotat_mat(global_feature)
+        # ############ 添加rotation的预测 ############ 
+        # if self.rotat_feature == "rebuild_feature":
+        #     rotation_matrix = self.rotat_mat(rebuild_feature)
+        # elif self.rotat_feature == "global_feature":
+        #     rotation_matrix = self.rotat_mat(global_feature)
             
-        # 对rotation_matrix进行正则化
-        norm = torch.linalg.norm(rotation_matrix, dim=1, keepdim=True) + 1e-10
-        rotation_matrix = rotation_matrix / norm
-        ###########################################
+        # # 对rotation_matrix进行正则化
+        # if self.rotate_norm:
+        #     norm = torch.linalg.norm(rotation_matrix, dim=1, keepdim=True) + 1e-10
+        #     rotation_matrix = rotation_matrix / norm
+        # ###########################################
         
+        ############# 添加分支预测 rotate trans size ############
+        
+        rotation_mat = self.rotat_head(global_feature)
+        trans_mat = self.trans_head(global_feature)
+        size_mat = self.size_head(global_feature)
+        
+        ########################################################
         
         # NOTE: foldingNet
         if self.decoder_type == 'fold':
@@ -1019,7 +1048,7 @@ class AdaPoinTr_Pose(nn.Module):
             assert pred_fine.size(1) == self.num_query * self.factor
             assert pred_coarse.size(1) == self.num_query
 
-            ret = (pred_coarse, denoised_coarse, denoised_fine, pred_fine, rotation_matrix)
+            ret = (pred_coarse, denoised_coarse, denoised_fine, pred_fine, rotation_mat, trans_mat, size_mat)
             return ret
 
         else:
@@ -1029,5 +1058,5 @@ class AdaPoinTr_Pose(nn.Module):
             assert rebuild_points.size(1) == self.num_query * self.factor
             assert coarse_point_cloud.size(1) == self.num_query
 
-            ret = (coarse_point_cloud, rebuild_points, rotation_matrix)
+            ret = (coarse_point_cloud, rebuild_points, rotation_mat, trans_mat, size_mat)
             return ret

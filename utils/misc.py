@@ -362,6 +362,46 @@ def semi_sphere_generate_samples(samples=300, distance=5):
 
     return np.stack(RTs)
 
+def sphere_generate_samples(samples=300, distance=5):
+    RTs = [] # pose transform matrix
+    # golden angle in radians
+    phi = math.pi * (math.sqrt(5.) - 1.)  
+    for i in range(samples): # num -> samples
+        # y goes from 1 to -1 -> 0 to 1
+        # y = 1 - (i / float(samples - 1)) * 2  
+        # y goes from 0 to 1
+        z = 1 - (i / float(samples - 1)) * 2  # z goes from 1 to -1
+        
+        if z == 1:
+            z = 1 - 1e-10
+        elif z == -1:
+            z = -1 + 1e-10
+
+        radius = math.sqrt(1 - z * z)  # radius at y
+
+        theta = phi * i  # golden angle increment
+
+        x = math.cos(theta) * radius
+        y = math.sin(theta) * radius
+        cam_pos = np.array([x, y, z]) * distance
+        # cam_pos = np.array([-2, -2, -3])
+        # print(cam_pos)
+
+        axisX = -cam_pos.copy()
+        axisZ = np.array([0,0,1])
+        axisY = np.cross(axisZ, axisX)
+        axisZ = np.cross(axisX, axisY)
+
+        cam_mat = np.array([uint(axisX), uint(axisY), uint(axisZ)])
+
+        obj_RT = np.eye(4,4)
+        obj_RT[:3, :3] = cam_mat.T
+        obj_RT[:3, 3] = cam_pos
+
+        RTs.append(obj_RT)
+
+    return np.stack(RTs)
+
 def transform_point_cloud_to_camera_frame(point_cloud, RT):
     """
     将点云从全局坐标系转换为相机坐标系
