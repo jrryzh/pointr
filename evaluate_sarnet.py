@@ -18,22 +18,29 @@ import cv2
 import glob
 import numpy as np
 from tqdm import tqdm
+import time
 import _pickle as cPickle
 import torch
-from lib.utils_files import create_folder
+from utils.utils_files import create_folder
 
 from utils import convert_rotation
 
-# SARNet
-import net_respo.net_sarnet as sarnet
-import lib.umeyama as umeyama
-from lib.utils_pose import load_obj, load_depth, save_to_obj_pts, pc_normalize, get_bbox, compute_mAP, plot_mAP
+from utils import parser as model_parser
+
+
+# model(depreciated: sarnet)
+from utils.utils_pose import load_obj, load_depth, save_to_obj_pts, pc_normalize, get_bbox, compute_mAP, plot_mAP, draw_detections
 
 # seg 3D
-from config.config_seg3d import args
-from net_respo.net_seg3d import GCN3D
-from lib.utils_seg import get_valid_labels, get_mask, get_catgory_onehot
+from utils.config_seg3d import args as seg3d_args
+from utils.net_seg3d import GCN3D
+from utils.utils_seg import get_valid_labels, get_mask, get_catgory_onehot
+
+
+from utils.logger import *
+from utils.config import *
 import configargparse
+from tools import builder
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -44,52 +51,6 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
-
-
-parser = configargparse.ArgumentParser()
-# parser = argparse.ArgumentParser()
-parser.add_argument('--config', is_config_file=True,help='config file path')
-parser.add_argument('--data_type', type=str, default='real_test', help='cam_val, real_test')
-parser.add_argument('--data_folder', type=str, default='../data/NOCS', help='data directory')
-parser.add_argument('--results_folder', type=str, default='../results/NOCS', help='root path for saving results')
-parser.add_argument('--temp_folder', type=str, default='../data/NOCS/template_FPS', help='root path for saving template')
-parser.add_argument('--backproj_npts', type=int, default=2048, help='number of foreground points')
-parser.add_argument('--gpu', type=str, default='6', help='GPU to use')
-parser.add_argument('--detect_type', type=str, default='mask', help='[mask, bbx]]')
-parser.add_argument('--detect_network', type=str, default='mrcnn', help='[mrcnn, yolo, ...]]')
-parser.add_argument('--GCN3D_isNeed', type=str2bool, default=True, help='add 3d point segmentation 3DGCN')
-parser.add_argument('--pcd_isSave', type=str2bool, default=False, help='save immediate point cloud')
-parser.add_argument('--output_pcd_folder', type=str, default='', help='path of immediate point cloud')
-parser.add_argument('--SARNet_model_path', type=str, default='', help='model path of SARNet')
-parser.add_argument('--GCN3D_model_path', type=str, default='', help='model path of 3DGCN')
-
-opt = parser.parse_args()
-assert opt.data_type in ['cam_val', 'real_test']
-epoch = os.path.basename(opt.SARNet_model_path).split('.')[0]
-if opt.data_type == 'cam_val':
-    result_folder = os.path.join(opt.results_folder, 'CAM_{}_{}_epoch{}'.format(opt.detect_network, opt.detect_type, epoch))
-    file_path = 'CAMERA/val_list.txt'
-    cam_fx, cam_fy, cam_cx, cam_cy = 577.5, 577.5, 319.5, 239.5
-else:
-    result_folder = os.path.join(opt.results_folder, 'REAL_{}_{}_epoch{}'.format(opt.detect_network, opt.detect_type, epoch))
-    file_path = 'Real/test_list.txt'
-    cam_fx, cam_fy, cam_cx, cam_cy = 591.0125, 590.16775, 322.525, 244.11084
-
-
-intrinsics = np.array([[cam_fx, 0,      cam_cx],
-                       [0,      cam_fy, cam_cy],
-                       [0,      0,      1     ]])
-xmap = np.array([[i for i in range(640)] for j in range(480)])
-ymap = np.array([[j for i in range(640)] for j in range(480)])
-norm_scale = 1000.0
-categories_seg = ['bottle', 'bowl', 'camera', 'can', 'laptop', 'mug'] # 02876657|02880940|02942699|02946921|03642806|03797390
-
-print('============================')
-print('detect_network = [{}]'.format(opt.detect_network))
-print('detect_type = [{}]'.format(opt.detect_type))
-print('3DGCN segmentation = [{}]'.format(opt.GCN3D_isNeed))
-print('save_results_folder = [{}]'.format(result_folder))
-print('============================')
 
 def depth2pcd(depth, choose, crop_reigon=None):
     if crop_reigon is not None:
@@ -121,44 +82,37 @@ def adjust_npts(choose, target_npts):
     return choose
 
 def estimate():
-    os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpu
+    # os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpu
     categories = ['BG', 'bottle', 'bowl', 'camera', 'can', 'laptop', 'mug']
-
-    # # load DONet
-    # # model_path = './models_pose/net_epoch_9_sizeloss1.model'#'../networks/sarnet_camera275K/00069.model'
-    # model_path = opt.SARNet_model_path #'../networks/sarnet_camera275K/00069.model'
-    # encoder_decoder = sarnet.EncoderDecoder()
-    # net_pose = sarnet.SARNet(encoder_decoder)
-    # net_pose.eval()
-    # net_pose.cuda()
-    # if 'net' in torch.load(model_path).keys():
-    #     net_pose.load_state_dict(torch.load(model_path)['net'])
-    # else:
-    #     net_pose.load_state_dict(torch.load(model_path))
     
     # Load adapointr_pose
     # TODO: Load the model
-    base_model = builder.model_builder(config.model)
-    builder.load_model(base_model, args.ckpts, logger = logger)
-    base_model.to(args.local_rank)
+    base_model = builder.model_builder(model_config.model)
+    builder.load_model(base_model, model_args.ckpts, logger = logger)
+    base_model.to(model_args.local_rank)
     base_model.eval()
-    print('Load_model in {}.'.format(model_path))
+    print('Load_model in {}.'.format(model_args.ckpts))
 
     # load Seg3D
     model_seg_path = opt.GCN3D_model_path#'./models_seg/20210530_5.pth'
-    net_Seg = GCN3D(class_num= args.class_num, cat_num=args.cat_num, support_num= args.support, neighbor_num= args.neighbor)
+    net_Seg = GCN3D(class_num= seg3d_args.class_num, cat_num=seg3d_args.cat_num, support_num= seg3d_args.support, neighbor_num= seg3d_args.neighbor)
     net_Seg.eval()
     net_Seg = torch.nn.DataParallel(net_Seg)
     net_Seg.load_state_dict(torch.load(model_seg_path)['net'])
     net_Seg = net_Seg.module.cuda()
     print('Load_model in {}.'.format(model_seg_path))
 
-    create_folder(result_folder) # TODO: 修改result folder路径
+    # TODO: 修改result folder路径
+    create_folder(result_folder) 
 
     # Real/ test/scene_1/0000
     img_list = [os.path.join(file_path.split('/')[0], line.rstrip('\n'))
                 for line in open(os.path.join(opt.data_folder, file_path))]
 
+    # TODO: img_list 先取前10
+    img_list = img_list[:10]
+    #########################
+    
     inst_count = 0
     img_count = 0
     # frame by frame test
@@ -183,6 +137,9 @@ def estimate():
         num_insts = len(mrcnn_result['pred_class_ids'])
         f_sRT = np.zeros((num_insts, 4, 4), dtype=float)
         f_size = np.zeros((num_insts, 3), dtype=float)
+        
+        # TODO: DEBUG: 观察添加对称效果有何作用
+        f_class_id = mrcnn_result['pred_class_ids']
 
         '''
         ###############################
@@ -211,11 +168,10 @@ def estimate():
                 continue
 
             choose = adjust_npts(choose, opt.backproj_npts)
-            backproj_pcd = depth2pcd(depth=raw_depth, choose=choose, crop_reigon=(rmin,rmax,cmin,cmax)) #(N,3)
-            cv2.imwrite('crop.png', raw_rgb[rmin:rmax, cmin:cmax])
+            _backproj_pcd = depth2pcd(depth=raw_depth, choose=choose, crop_reigon=(rmin,rmax,cmin,cmax)) #(N,3)
+            # cv2.imwrite('crop.png', raw_rgb[rmin:rmax, cmin:cmax])
 
-            backproj_pcd, centroid_seg, s_factor_seg = pc_normalize(backproj_pcd)
-
+            backproj_pcd, centroid_seg, s_factor_seg = pc_normalize(_backproj_pcd)
 
             sample = np.random.choice(backproj_pcd.shape[0], size=opt.backproj_npts, replace=False)
             backproj_pcd = backproj_pcd[sample]
@@ -247,16 +203,17 @@ def estimate():
                 pcd = o3d.geometry.PointCloud()
                 pcd.points = o3d.utility.Vector3dVector(obsv_pcd)
                 cl, ind = pcd.remove_statistical_outlier(nb_neighbors=50, std_ratio=1)
-                inlier_cloud = pcd.select_down_sample(ind)
+                inlier_cloud = pcd.select_by_index(ind)
                 obsv_pcd = np.asarray(inlier_cloud.points)
 
             if opt.pcd_isSave:
                 scene_id = path.split('/')[-2].split('_')[-1]
                 image_id = path.split('/')[-1]
                 create_folder(opt.output_pcd_folder)
+                save_to_obj_pts(_backproj_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_original.obj'.format(scene_id, image_id, categories[cate_id + 1])))
                 save_to_obj_pts(backproj_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_src_in.obj'.format(scene_id, image_id, categories[cate_id + 1])))
                 save_to_obj_pts(obsv_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_seg.obj'.format(scene_id, image_id, categories[cate_id + 1])))
-
+                
             # '''
             # ###############################
             # # Step 2 SARNet inference
@@ -291,21 +248,44 @@ def estimate():
             # Step 2 Adapointr_Pose inference
             ###############################
             '''
-            # TODO: change to adapointr inference
-            obsv_pcd, centroid, s_factor = pc_normalize(obsv_pcd)  # (N,3)
-            obsv_pcd_tensor = torch.from_numpy(obsv_pcd).unsqueeze(0).transpose(2, 1).contiguous() # (3,N)
-            obsv_pcd_tensor = obsv_pcd_tensor.cuda().float()
+            # TODO: change to adapointr inference  
+            # DEBUG
+            test2train_mat = np.array([
+                [0, 0, 1],
+                [0, 1, 0],
+                [-1, 0, 0]
+            ])                      
+            _input_pcd, centroid, s_factor = pc_normalize(obsv_pcd)  # (N,3)
+            input_pcd = _input_pcd.dot(test2train_mat)
+            input_pcd_tensor = torch.from_numpy(input_pcd).unsqueeze(0).contiguous()
+            input_pcd_tensor = input_pcd_tensor.cuda().float()
             
-            ret = base_model(obsv_pcd_tensor)
+            if opt.pcd_isSave:
+                scene_id = path.split('/')[-2].split('_')[-1]
+                image_id = path.split('/')[-1]
+                create_folder(opt.output_pcd_folder)
+                save_to_obj_pts(input_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_final_input.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+            
+            
+            ret = base_model(input_pcd_tensor)
             coarse_points = ret[0]
             dense_points = ret[1]
             pred_rotat_mat = ret[2]
             pred_trans_mat = ret[3]
             pred_size_mat = ret[4]
             
+            coarse_points_np = coarse_points.cpu().detach().numpy().squeeze()
+            dense_points_np = dense_points.cpu().detach().numpy().squeeze()
+            if opt.pcd_isSave:
+                scene_id = path.split('/')[-2].split('_')[-1]
+                image_id = path.split('/')[-1]
+                create_folder(opt.output_pcd_folder)
+                save_to_obj_pts(coarse_points_np, os.path.join(opt.output_pcd_folder, '{}_{}_{}_coarse_complete.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+                save_to_obj_pts(dense_points_np, os.path.join(opt.output_pcd_folder, '{}_{}_{}_dense_complete.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+            import ipdb; ipdb.set_trace()
             '''
             ###############################
-            # Step 3 Post-processing
+            # Step 3 Post-processing 
             ###############################
             '''
             # _, _, _, pred_sRT = umeyama.estimateSimilarityTransform(temp_pcd, pred_SA.transpose(), False)  # (N,3)
@@ -333,13 +313,17 @@ def estimate():
             # f_sRT[i] = pred_sRT
             
             # TODO: change to adapointr pose postprocessing
-            f_size[i] = pred_size_mat * s_factor * s_factor_seg
+            pred_size_mat_np = pred_size_mat.cpu().detach().numpy().squeeze()
+            pred_rotat_mat_np = pred_rotat_mat.cpu().detach().numpy().squeeze()
+            pred_trans_mat_np = pred_trans_mat.cpu().detach().numpy().squeeze()
+            
+            f_size[i] = pred_size_mat_np * s_factor * s_factor_seg
             pred_sRT = np.identity(4, dtype=float)
-            pred_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(pred_rotat_mat)
+            pred_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(pred_rotat_mat_np)
             cluster_center = np.mean(obsv_pcd, axis=1)
-            pred_sRT[0, 3] = (centroid_seg[0] + (centroid[0] + (cluster_center[0] + pred_trans_mat[0]) * s_factor) * s_factor_seg)
-            pred_sRT[1, 3] = (centroid_seg[1] + (centroid[1] + (cluster_center[1] + pred_trans_mat[1]) * s_factor) * s_factor_seg)
-            pred_sRT[2, 3] = (centroid_seg[2] + (centroid[2] + (cluster_center[2] + pred_trans_mat[2]) * s_factor) * s_factor_seg)
+            pred_sRT[0, 3] = (centroid_seg[0] + (centroid[0] + (cluster_center[0] + pred_trans_mat_np[0]) * s_factor) * s_factor_seg)
+            pred_sRT[1, 3] = (centroid_seg[1] + (centroid[1] + (cluster_center[1] + pred_trans_mat_np[1]) * s_factor) * s_factor_seg)
+            pred_sRT[2, 3] = (centroid_seg[2] + (centroid[2] + (cluster_center[2] + pred_trans_mat_np[2]) * s_factor) * s_factor_seg)
             f_sRT[i] = pred_sRT
 
             inst_count += 1
@@ -367,6 +351,10 @@ def estimate():
         save_path = os.path.join(result_folder, 'results_{}.pkl'.format(image_short_path))
         with open(save_path, 'wb') as f:
             cPickle.dump(result, f)
+            
+        # TODO: DEBUG: draw result
+        draw_detections(raw_rgb[:, :, ::-1], result_folder, 'd435', '0000', intrinsics, f_sRT, f_size, f_class_id,
+            [], [], [], [], [], [], draw_gt=False, draw_nocs=False)
     # write statistics
     fw = open('{0}/eval_logs.txt'.format(result_folder), 'a')
     messages = []
@@ -450,7 +438,62 @@ def evaluate():
     plot_mAP(iou_aps, pose_aps, result_folder, iou_thres_list, degree_thres_list, shift_thres_list)
 
 if __name__ == "__main__":
+    
+    parser = configargparse.ArgumentParser()
+    # parser = argparse.ArgumentParser()
+    parser.add_argument('--config',help='config file path')
+    parser.add_argument('--ckpts', help='ckpt')
+    ##### 等待优化掉 #######
+    parser.add_argument('--data_type', type=str, default='real_test', help='cam_val, real_test')
+    parser.add_argument('--data_folder', type=str, default='./data/NOCS', help='data directory')
+    parser.add_argument('--results_folder', type=str, default='./results/NOCS', help='root path for saving results')
+    # parser.add_argument('--temp_folder', type=str, default='../data/NOCS/template_FPS', help='root path for saving template')
+    parser.add_argument('--backproj_npts', type=int, default=2048, help='number of foreground points')
+    parser.add_argument('--gpu', type=str, default='0', help='GPU to use')
+    parser.add_argument('--detect_type', type=str, default='mask', help='[mask, bbx]]')
+    parser.add_argument('--detect_network', type=str, default='mrcnn', help='[mrcnn, yolo, ...]]')
+    parser.add_argument('--GCN3D_isNeed', type=str2bool, default=True, help='add 3d point segmentation 3DGCN')
+    parser.add_argument('--pcd_isSave', type=str2bool, default=True, help='save immediate point cloud')
+    parser.add_argument('--output_pcd_folder', type=str, default='./tmp/test0908/', help='path of immediate point cloud')
+    parser.add_argument('--GCN3D_model_path', type=str, default='./ckpts/20210530_5.pth', help='model path of 3DGCN')
+    
+    opt = parser.parse_args()
+    model_args = model_parser.get_args()
+    
+    # model
+    timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
+    log_file = os.path.join(model_args.experiment_path, f'{timestamp}.log')
+    logger = get_root_logger(log_file=log_file, name=model_args.log_name)
+    model_config = get_config(model_args, logger = logger)
+    ####### 这一段是死的，为了model_config  load model ########
+    
+    assert opt.data_type in ['cam_val', 'real_test']
+    if opt.data_type == 'cam_val':
+        result_folder = os.path.join(opt.results_folder, 'CAM_{}_{}'.format(opt.detect_network, opt.detect_type))
+        file_path = 'CAMERA/val_list.txt'
+        cam_fx, cam_fy, cam_cx, cam_cy = 577.5, 577.5, 319.5, 239.5
+    else:
+        result_folder = os.path.join(opt.results_folder, 'REAL_{}_{}'.format(opt.detect_network, opt.detect_type))
+        file_path = 'Real/test_list.txt'
+        cam_fx, cam_fy, cam_cx, cam_cy = 591.0125, 590.16775, 322.525, 244.11084
+
+
+    intrinsics = np.array([[cam_fx, 0,      cam_cx],
+                        [0,      cam_fy, cam_cy],
+                        [0,      0,      1     ]])
+    xmap = np.array([[i for i in range(640)] for j in range(480)])
+    ymap = np.array([[j for i in range(640)] for j in range(480)])
+    norm_scale = 1000.0
+    categories_seg = ['bottle', 'bowl', 'camera', 'can', 'laptop', 'mug'] # 02876657|02880940|02942699|02946921|03642806|03797390
+
+    print('============================')
+    print('detect_network = [{}]'.format(opt.detect_network))
+    print('detect_type = [{}]'.format(opt.detect_type))
+    print('3DGCN segmentation = [{}]'.format(opt.GCN3D_isNeed))
+    print('save_results_folder = [{}]'.format(result_folder))
+    print('============================')
+    
     print('Estimating ...')
     estimate()
-    print('Evaluating ...')
-    evaluate()
+    # print('Evaluating ...')
+    # evaluate()

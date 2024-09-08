@@ -11,7 +11,7 @@ bash ./scripts/test.sh 3 --ckpts ./ckpts/pointr_training_from_scratch_c55_best.p
 # add_pose
 bash ./scripts/train.sh 0 --config ./cfgs/PartialSpace_ShapeNet55_models/AdaPoinTr_Pose.yaml --exp_name test_rotate
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 bash ./scripts/dist_train.sh 8 13232 --config ./cfgs/PartialSpace_ShapeNet55_models/AdaPoinTr_Pose.yaml --exp_name test_rotate
-bash ./scripts/test.sh 0 --ckpts /home/fudan248/zhangjinyu/code_repo/PoinTr/ckpts/ckpt-best.pth --config ./cfgs/PartialSpace_ShapeNet55_models/AdaPoinTr_Pose.yaml --mode median --exp_name test
+bash ./scripts/test.sh 0 --ckpts ./experiments/AdaPoinTr_Pose/PartialSpace_ShapeNet55_models/NOCS_add_pose_seperate_global_feature/ckpt-best.pth --config ./cfgs/PartialSpace_ShapeNet55_models/AdaPoinTr_Pose.yaml --mode median --exp_name test
 
 # partial pc space
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 bash ./scripts/dist_train.sh 8 13232 --config ./cfgs/PartialSpace_ShapeNet55_models/AdaPoinTr.yaml --exp_name test_dataset

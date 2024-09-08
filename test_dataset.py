@@ -8,24 +8,38 @@ import random
 from utils import misc
 from torch.utils.data import DataLoader
 
+
+
+def save_to_obj_pts(verts, path):
+
+    file = open(path, 'w')
+    for v in verts:
+        file.write('v %f %f %f\n' % (v[0], v[1], v[2]))
+
+    file.close()
+    
+    
 if __name__ == '__main__':
     data_root = "data/ShapeNet55-34/ShapeNet-55"
     pc_path = "data/ShapeNet55-34/shapenet_pc"
     subset = "test"
     npoints = 8192
-    data_list_file = os.path.join(data_root, f'{subset}.txt')
+    data_list_file = os.path.join(data_root, f'nocs_{subset}.txt')
 
     print(f'[DATASET] Open file {data_list_file}')
     with open(data_list_file, 'r') as f:
         lines = f.readlines()
     
+    # DEBUG: only keep mugs
+    
+    lines = [line for line in lines if "03797390" in line]
     file_list = []
     for idx, line in enumerate(lines):
         line = line.strip()
         taxonomy_id = line.split('-')[0]
         model_id = line.split('-')[1].split('.')[0]
         
-        camera_poses = misc.semi_sphere_generate_samples(10, 3)
+        camera_poses = misc.semi_sphere_generate_samples(100, 3)
         
         for pose in camera_poses:
         
@@ -38,7 +52,7 @@ if __name__ == '__main__':
         if idx == 2:
             break
 
-    for idx in range(5):
+    for idx in range(50):
         print(f"sample {idx}: {file_list[idx]}")
         
         # sample = file_list[idx]
@@ -75,10 +89,14 @@ if __name__ == '__main__':
         
         data['partial'], centroid, scale = misc.pc_normalize(_partial_pc)
         data['gt'] = (_complete_pc - centroid) / scale
-        # 
         
+        save_path = "/data/nas/zjy/code_repo/pointr/tmp/test0908"
+        save_to_obj_pts(_complete_pc, os.path.join(save_path, f"complete_pc_cam_{idx}.obj"))
+        save_to_obj_pts(_partial_pc, os.path.join(save_path, f"partial_pc_cam_{idx}.obj"))
+        
+        save_to_obj_pts(data['partial'], os.path.join(save_path, f"partial_normalize_{idx}.obj"))
+        save_to_obj_pts(data['gt'], os.path.join(save_path, f"complete_normalize_{idx}.obj"))
 
-        
         # with open(f"/home/fudan248/zhangjinyu/code_repo/PoinTr/tmp/0822/before_normalize_complete_pc_{idx}.obj", "w") as f:
         #     for point in _complete_pc:
         #         f.write(f"v {point[0]} {point[1]} {point[2]}\n")
