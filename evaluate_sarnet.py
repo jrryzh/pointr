@@ -206,13 +206,14 @@ def estimate():
                 inlier_cloud = pcd.select_by_index(ind)
                 obsv_pcd = np.asarray(inlier_cloud.points)
 
-            if opt.pcd_isSave:
-                scene_id = path.split('/')[-2].split('_')[-1]
-                image_id = path.split('/')[-1]
-                create_folder(opt.output_pcd_folder)
-                save_to_obj_pts(_backproj_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_original.obj'.format(scene_id, image_id, categories[cate_id + 1])))
-                save_to_obj_pts(backproj_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_src_in.obj'.format(scene_id, image_id, categories[cate_id + 1])))
-                save_to_obj_pts(obsv_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_seg.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+            # if opt.pcd_isSave:
+            #     scene_id = path.split('/')[-2].split('_')[-1]
+            #     image_id = path.split('/')[-1]
+            #     create_folder(opt.output_pcd_folder)
+            #     save_to_obj_pts(_backproj_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_original.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+            #     save_to_obj_pts(backproj_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_src_in.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+            #     save_to_obj_pts(obsv_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_seg.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+            #     print(f"保存输入 pc: {os.path.join(opt.output_pcd_folder, '{}_{}_{}_seg.obj'.format(scene_id, image_id, categories[cate_id + 1]))}")
                 
             # '''
             # ###############################
@@ -251,9 +252,9 @@ def estimate():
             # TODO: change to adapointr inference  
             # DEBUG
             test2train_mat = np.array([
-                [0, 0, 1],
-                [0, 1, 0],
-                [-1, 0, 0]
+                [1, 0, 0],
+                [0, -1, 0],
+                [0, 0, -1]
             ])                      
             _input_pcd, centroid, s_factor = pc_normalize(obsv_pcd)  # (N,3)
             input_pcd = _input_pcd.dot(test2train_mat)
@@ -280,9 +281,13 @@ def estimate():
                 scene_id = path.split('/')[-2].split('_')[-1]
                 image_id = path.split('/')[-1]
                 create_folder(opt.output_pcd_folder)
+                save_to_obj_pts(input_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_input.obj'.format(scene_id, image_id, categories[cate_id + 1])))
                 save_to_obj_pts(coarse_points_np, os.path.join(opt.output_pcd_folder, '{}_{}_{}_coarse_complete.obj'.format(scene_id, image_id, categories[cate_id + 1])))
                 save_to_obj_pts(dense_points_np, os.path.join(opt.output_pcd_folder, '{}_{}_{}_dense_complete.obj'.format(scene_id, image_id, categories[cate_id + 1])))
-            import ipdb; ipdb.set_trace()
+                print(f"保存输入 pc: {os.path.join(opt.output_pcd_folder, '{}_{}_{}_input.obj'.format(scene_id, image_id, categories[cate_id + 1]))}")
+                print(f"保存补全后coarse pc: {os.path.join(opt.output_pcd_folder, '{}_{}_{}_coarse_complete.obj'.format(scene_id, image_id, categories[cate_id + 1]))}")
+                print(f"保存补全后dense pc: {os.path.join(opt.output_pcd_folder, '{}_{}_{}_dense_complete.obj'.format(scene_id, image_id, categories[cate_id + 1]))}")
+            # import ipdb; ipdb.set_trace()
             '''
             ###############################
             # Step 3 Post-processing 
@@ -317,13 +322,22 @@ def estimate():
             pred_rotat_mat_np = pred_rotat_mat.cpu().detach().numpy().squeeze()
             pred_trans_mat_np = pred_trans_mat.cpu().detach().numpy().squeeze()
             
-            f_size[i] = pred_size_mat_np * s_factor * s_factor_seg
+            # TODO: 先尝试反乘变换矩阵
+            train_to_test_mat = np.array([
+                [1, 0, 0],
+                [0, -1, 0],
+                [0, 0, -1]
+            ])
+            pred_trans_mat_np = pred_trans_mat_np @ train_to_test_mat
+            
+            # f_size[i] = pred_size_mat_np * s_factor * s_factor_seg
+            f_size[i] = pred_size_mat_np
             pred_sRT = np.identity(4, dtype=float)
             pred_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(pred_rotat_mat_np)
-            cluster_center = np.mean(obsv_pcd, axis=1)
+            cluster_center = np.mean(_input_pcd, axis=1) # obsv_pcd: 初始 _input_pcd: 正则化后 input_pcd: 旋转后
             pred_sRT[0, 3] = (centroid_seg[0] + (centroid[0] + (cluster_center[0] + pred_trans_mat_np[0]) * s_factor) * s_factor_seg)
-            pred_sRT[1, 3] = (centroid_seg[1] + (centroid[1] + (cluster_center[1] + pred_trans_mat_np[1]) * s_factor) * s_factor_seg)
-            pred_sRT[2, 3] = (centroid_seg[2] + (centroid[2] + (cluster_center[2] + pred_trans_mat_np[2]) * s_factor) * s_factor_seg)
+            pred_sRT[1, 3] = -(centroid_seg[1] + (centroid[1] + (cluster_center[1] + pred_trans_mat_np[1]) * s_factor) * s_factor_seg)
+            pred_sRT[2, 3] = -(centroid_seg[2] + (centroid[2] + (cluster_center[2] + pred_trans_mat_np[2]) * s_factor) * s_factor_seg)
             f_sRT[i] = pred_sRT
 
             inst_count += 1
@@ -351,10 +365,10 @@ def estimate():
         save_path = os.path.join(result_folder, 'results_{}.pkl'.format(image_short_path))
         with open(save_path, 'wb') as f:
             cPickle.dump(result, f)
-            
         # TODO: DEBUG: draw result
-        draw_detections(raw_rgb[:, :, ::-1], result_folder, 'd435', '0000', intrinsics, f_sRT, f_size, f_class_id,
+        draw_detections(raw_rgb[:, :, ::-1], result_folder, 'd435', f'{img_count:04}', intrinsics, f_sRT, f_size, f_class_id,
             [], [], [], [], [], [], draw_gt=False, draw_nocs=False)
+        # import ipdb; ipdb.set_trace()
     # write statistics
     fw = open('{0}/eval_logs.txt'.format(result_folder), 'a')
     messages = []

@@ -862,7 +862,7 @@ def draw(img, imgpts, axes, color):
 
     return img
 
-def draw_detections(img, out_dir, data_name, img_id, intrinsics, pred_sRT, pred_size, pred_class_ids,
+def _draw_detections(img, out_dir, data_name, img_id, intrinsics, pred_sRT, pred_size, pred_class_ids,
                     gt_sRT, gt_size, gt_class_ids, nocs_sRT, nocs_size, nocs_class_ids, draw_gt=True, draw_nocs=True):
     """ Visualize pose predictions.
     """
@@ -900,6 +900,31 @@ def draw_detections(img, out_dir, data_name, img_id, intrinsics, pred_sRT, pred_
             projected_axes = calculate_2d_projections(transformed_axes, intrinsics)
 
             img = draw(img, projected_bbox, projected_axes, (255, 0, 0))
+    # darw prediction - RED color
+    for i in range(pred_sRT.shape[0]):
+        if pred_class_ids[i] in [1, 2, 4]:
+            sRT = align_rotation(pred_sRT[i, :, :])
+        else:
+            sRT = pred_sRT[i, :, :]
+        bbox_3d = get_3d_bbox(pred_size[i, :], 0)
+        transformed_bbox_3d = transform_coordinates_3d(bbox_3d, sRT)
+        projected_bbox = calculate_2d_projections(transformed_bbox_3d, intrinsics)
+
+        xyz_axis = 0.1 * np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]]).transpose()
+        transformed_axes = transform_coordinates_3d(xyz_axis, sRT)
+        projected_axes = calculate_2d_projections(transformed_axes, intrinsics)
+
+        img = draw(img, projected_bbox, projected_axes, (255, 255, 0))
+
+    cv2.imwrite(out_path, img)
+    # cv2.imshow('vis', img)
+    # cv2.waitKey(0)
+
+def draw_detections(img, out_dir, data_name, img_id, intrinsics, pred_sRT, pred_size, pred_class_ids):
+    """ Visualize pose predictions.
+    """
+    out_path = os.path.join(out_dir, '{}_{}_pred.png'.format(data_name, img_id))
+    
     # darw prediction - RED color
     for i in range(pred_sRT.shape[0]):
         if pred_class_ids[i] in [1, 2, 4]:

@@ -4,6 +4,7 @@ import numpy as np
 import torch.utils.data as data
 import logging
 import random
+import cv2
 
 from utils import misc
 from utils import utils_pose
@@ -132,7 +133,8 @@ if __name__ == '__main__':
                     'model_id': model_id,
                     'obj_path': os.path.join(obj_path, f'{taxonomy_id}-{model_id}.npy'),
                     'pose_path': os.path.join(line, f'{idx:04}_pose.txt'),
-                    'pcd_path': os.path.join(line, f'{idx:04}_pcd.obj')
+                    'pcd_path': os.path.join(line, f'{idx:04}_pcd.obj'),
+                    'img_path': os.path.join(line, f'{idx:04}_rgb.png')
                 })
         break
 
@@ -142,6 +144,8 @@ if __name__ == '__main__':
         sample = file_list[idx]
 
         data = {}
+        
+        img = cv2.imread(sample['img_path'])
         
         # _complete_pc = np.load(os.path.join(pc_path, sample['file_path'])).astype(np.float32)
         # _complete_pc, _, _ = misc.pc_normalize(_complete_pc)
@@ -184,6 +188,7 @@ if __name__ == '__main__':
         # save_to_obj_pts(data['gt'], os.path.join(save_path, f"complete_normalize_{idx}.obj"))
         #############################################
         
+        # 将pointr提供的npy旋转为我们flip后的结果
         convert_matrix = np.array([
             [1, 0,  0],
             [0, 0,  1],
@@ -194,28 +199,30 @@ if __name__ == '__main__':
         _pose = np.loadtxt(sample['pose_path'])
         partial_pc, _ = utils_pose.load_obj(sample['pcd_path'])
         complete_pc = utils_pose.apply_transformation(_complete_pc, _pose)
-        
-        
+        # TODO：对partial_pc做一步采样，先设置为2048
+        np.random.seed(idx)
+        sample_idx = np.random.choice(partial_pc.shape[0], size=1024, replace=True)
+        partial_pc = partial_pc[sample_idx]
+
         data['partial'], centroid, scale = misc.pc_normalize(partial_pc)
         data['gt'] = (complete_pc - centroid) / scale
         
         ##### R T s #####
         rotate_mat = convert_rotation.single_rotation_matrix_to_ortho6d(_pose[:3, :3]).flatten()
-        trans_mat = np.mean(data['gt'], axis=0) - np.mean(data['partial'], axis=0)
-        min_x, max_x = np.min(_complete_pc[:, 0]), np.max(_complete_pc[:, 0])
-        min_y, max_y = np.min(_complete_pc[:, 1]), np.max(_complete_pc[:, 1])
-        min_z, max_z = np.min(_complete_pc[:, 2]), np.max(_complete_pc[:, 2])
+        trans_mat = _pose[:3, 3].flatten()
+        min_x, max_x = np.min(data['gt'][:, 0]), np.max(data['gt'][:, 0])
+        min_y, max_y = np.min(data['gt'][:, 1]), np.max(data['gt'][:, 1])
+        min_z, max_z = np.min(data['gt'][:, 2]), np.max(data['gt'][:, 2])
         size_mat = np.array((max_x - min_x, max_y - min_y, max_z - min_z))
-        #################
+        ##################
         
+        ##### draw #####
+        cam_fx, cam_fy, cam_cx, cam_cy = 591.0125, 590.16775, 322.525, 244.11084
+        intrinsics = np.array([[cam_fx, 0,      cam_cx],
+                            [0,      cam_fy, cam_cy],
+                            [0,      0,      1     ]])
         
-        result = (data['partial'].astype(np.float32), data['gt'].astype(np.float32), rotate_mat.astype(np.float32), trans_mat.astype(np.float32), size_mat.astype(np.float32))
-
-        for d in result:
-            print(d.shape)
-        
-        
-        
+        utils_pose.draw_detections(img, '/data/nas/zjy/code_repo/pointr/tmp/test0911', 'd435', '0000', intrinsics, _pose, size_mat, -1)
         # save_path = "/home/fudan248/zhangjinyu/code_repo/PoinTr/tmp/0909"
         # save_to_obj_pts(_complete_pc, os.path.join(save_path, f"complete_pc_cam_{idx}.obj"))
         # save_to_obj_pts(partial_pc, os.path.join(save_path, f"partial_pc_cam_{idx}.obj"))
