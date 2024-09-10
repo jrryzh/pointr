@@ -150,11 +150,11 @@ class SapienPartial_ShapeNet(data.Dataset):
         
         ##### R T s #####
         rotate_mat = convert_rotation.single_rotation_matrix_to_ortho6d(_pose[:3, :3]).flatten()
-        trans_mat = np.mean(data['gt'], axis=0) - np.mean(data['partial'], axis=0)
+        trans_mat = _pose[:3, 3].flatten()
         min_x, max_x = np.min(_complete_pc[:, 0]), np.max(_complete_pc[:, 0])
         min_y, max_y = np.min(_complete_pc[:, 1]), np.max(_complete_pc[:, 1])
         min_z, max_z = np.min(_complete_pc[:, 2]), np.max(_complete_pc[:, 2])
-        size_mat = np.array((max_x - min_x, max_y - min_y, max_z - min_z))
+        size_mat = np.array(((max_x - min_x) / scale, (max_y - min_y) / scale, (max_z - min_z) / scale)) 
         ##################
         
         return sample['taxonomy_id'], sample['model_id'], (data['partial'].astype(np.float32), data['gt'].astype(np.float32), rotate_mat.astype(np.float32), trans_mat.astype(np.float32), size_mat.astype(np.float32))

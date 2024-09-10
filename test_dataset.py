@@ -208,12 +208,20 @@ if __name__ == '__main__':
         data['gt'] = (complete_pc - centroid) / scale
         
         ##### R T s #####
-        rotate_mat = convert_rotation.single_rotation_matrix_to_ortho6d(_pose[:3, :3]).flatten()
-        trans_mat = _pose[:3, 3].flatten()
-        min_x, max_x = np.min(data['gt'][:, 0]), np.max(data['gt'][:, 0])
-        min_y, max_y = np.min(data['gt'][:, 1]), np.max(data['gt'][:, 1])
-        min_z, max_z = np.min(data['gt'][:, 2]), np.max(data['gt'][:, 2])
-        size_mat = np.array((max_x - min_x, max_y - min_y, max_z - min_z))
+        # rotate_mat = convert_rotation.single_rotation_matrix_to_ortho6d(_pose[:3, :3]).flatten()
+        # trans_mat = _pose[:3, 3].flatten()
+        # min_x, max_x = np.min(data['gt'][:, 0]), np.max(data['gt'][:, 0])
+        # min_y, max_y = np.min(data['gt'][:, 1]), np.max(data['gt'][:, 1])
+        # min_z, max_z = np.min(data['gt'][:, 2]), np.max(data['gt'][:, 2])
+        # size_mat = np.array((max_x - min_x, max_y - min_y, max_z - min_z))
+        
+        # print(f'size mat 1, {size_mat}')
+        
+        min_x, max_x = np.min(_complete_pc[:, 0]), np.max(_complete_pc[:, 0])
+        min_y, max_y = np.min(_complete_pc[:, 1]), np.max(_complete_pc[:, 1])
+        min_z, max_z = np.min(_complete_pc[:, 2]), np.max(_complete_pc[:, 2])
+        size_mat = np.array(((max_x - min_x) / scale, (max_y - min_y) / scale, (max_z - min_z) / scale)) 
+        print(f'size mat 2, {size_mat}')       
         ##################
         
         ##### draw #####
@@ -222,7 +230,7 @@ if __name__ == '__main__':
                             [0,      cam_fy, cam_cy],
                             [0,      0,      1     ]])
         
-        utils_pose.draw_detections(img, '/data/nas/zjy/code_repo/pointr/tmp/test0911', 'd435', '0000', intrinsics, _pose, size_mat, -1)
+        utils_pose.draw_detections(img, '/home/fudan248/zhangjinyu/code_repo/PoinTr/tmp/0911', 'd435', f'{idx:04}', intrinsics, np.expand_dims(_pose, 0), np.expand_dims(size_mat, 0), [-1])
         # save_path = "/home/fudan248/zhangjinyu/code_repo/PoinTr/tmp/0909"
         # save_to_obj_pts(_complete_pc, os.path.join(save_path, f"complete_pc_cam_{idx}.obj"))
         # save_to_obj_pts(partial_pc, os.path.join(save_path, f"partial_pc_cam_{idx}.obj"))
