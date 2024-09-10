@@ -110,7 +110,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
                 partial, _ = misc.seprate_point_cloud(gt, npoints, [int(npoints * 1/4) , int(npoints * 3/4)], fixed_points = None)
                 partial = partial.cuda()
                 
-            elif dataset_name == 'PartialSpace_ShapeNet':
+            elif dataset_name == 'PartialSpace_ShapeNet' or 'SapienPartial_ShapeNet':
                 partial = data[0].cuda()
                 gt = data[1].cuda()
                 gt_rotate_mat = data[2].cuda()
@@ -227,7 +227,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
     print_log(f"[VALIDATION] Start validating epoch {epoch}", logger = logger)
     base_model.eval()  # set model to eval mode
 
-    test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2', 'RotateLoss'])
+    test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2', 'RotatLoss', 'TransLoss', 'SizeLoss'])
     test_metrics = AverageMeter(Metrics.names())
     category_metrics = dict()
     n_samples = len(test_dataloader) # bs is 1
@@ -248,7 +248,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
                 gt = data.cuda()
                 partial, _ = misc.seprate_point_cloud(gt, npoints, [int(npoints * 1/4) , int(npoints * 3/4)], fixed_points = None)
                 partial = partial.cuda()
-            elif dataset_name == 'PartialSpace_ShapeNet':
+            elif dataset_name == 'PartialSpace_ShapeNet' or 'SapienPartial_ShapeNet':
                 partial = data[0].cuda()
                 gt = data[1].cuda()
                 gt_rotate_mat = data[2].cuda()
@@ -271,7 +271,9 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
             dense_loss_l2 =  ChamferDisL2(dense_points, gt)
             
             ############### rotate matrix loss ################
-            pose_loss = nn.SmoothL1Loss()(pred_rotat_mat, gt_rotate_mat) + nn.SmoothL1Loss()(pred_trans_mat, gt_trans_mat) + nn.SmoothL1Loss()(pred_size_mat, gt_size_mat)
+            rotat_loss = nn.SmoothL1Loss()(pred_rotat_mat, gt_rotate_mat)
+            trans_loss = nn.SmoothL1Loss()(pred_trans_mat, gt_trans_mat)
+            size_loss = nn.SmoothL1Loss()(pred_size_mat, gt_size_mat)
             ##################################################
 
             if args.distributed:
@@ -279,12 +281,14 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
                 sparse_loss_l2 = dist_utils.reduce_tensor(sparse_loss_l2, args)
                 dense_loss_l1 = dist_utils.reduce_tensor(dense_loss_l1, args)
                 dense_loss_l2 = dist_utils.reduce_tensor(dense_loss_l2, args)
-                ############### rotate matrix loss ################
-                pose_loss = dist_utils.reduce_tensor(pose_loss, args)
+                ############### pose matrix loss ################
+                rotat_loss = dist_utils.reduce_tensor(rotat_loss, args)
+                trans_loss = dist_utils.reduce_tensor(trans_loss, args)
+                size_loss = dist_utils.reduce_tensor(size_loss, args)
                 ##################################################
                 
             if config.model.NAME == "AdaPoinTr_Pose":
-                test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000, pose_loss.item() * 1000])
+                test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000, rotat_loss.item() * 1000, trans_loss.item() * 1000, size_loss.item() * 1000])
             else:
                 test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000])
 
@@ -401,13 +405,16 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
 
     base_model.eval()  # set model to eval mode
 
-    test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2', 'PoseLoss'])
+    test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2', 'RotatLoss', 'TransLoss', 'SizeLoss'])
     test_metrics = AverageMeter(Metrics.names())
     category_metrics = dict()
     n_samples = len(test_dataloader) # bs is 1
 
     with torch.no_grad():
         for idx, (taxonomy_ids, model_ids, data) in enumerate(test_dataloader):
+            # DEBUG
+            print(f"Batch {idx} - data shape: {[d.shape for d in data]}") 
+            import ipdb; ipdb.set_trace()
             taxonomy_id = taxonomy_ids[0] if isinstance(taxonomy_ids[0], str) else taxonomy_ids[0].item()
             model_id = model_ids[0]
 
@@ -494,11 +501,14 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 dense_loss_l1 =  ChamferDisL1(dense_points, gt)
                 dense_loss_l2 =  ChamferDisL2(dense_points, gt)
 
-                ############### rotate matrix loss ################
-                pose_loss = nn.SmoothL1Loss()(pred_rotat_mat, gt_rotate_mat) + nn.SmoothL1Loss()(pred_trans_mat, gt_trans_mat) + nn.SmoothL1Loss()(pred_size_mat, gt_size_mat)
+                ############### pose matrix loss ################
+                rotat_loss = dist_utils.reduce_tensor(rotat_loss, args)
+                trans_loss = dist_utils.reduce_tensor(trans_loss, args)
+                size_loss = dist_utils.reduce_tensor(size_loss, args)
                 ##################################################
+                
                 if config.model.NAME == "AdaPoinTr_Pose":
-                    test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000, pose_loss.item() * 1000])
+                    test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000, rotat_loss.item() * 1000, trans_loss.item() * 1000, size_loss.item() * 1000])
                 else:
                     test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000])
                 
@@ -521,15 +531,6 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 # sample from 10518
                 if not os.path.exists(os.path.join(args.experiment_path, 'obj_output')):
                     os.mkdir(os.path.join(args.experiment_path, 'obj_output'))
-                
-                
-                
-                
-                
-                
-                    
-                
-                
                 misc.save_tensor_to_obj(partial, os.path.join(args.experiment_path, 'obj_output', f'{shapenet_dict[taxonomy_id]}_{model_id}_{idx:03d}_input.obj'))
                 misc.save_tensor_to_obj(coarse_points, os.path.join(args.experiment_path, 'obj_output', f'{shapenet_dict[taxonomy_id]}_{model_id}_{idx:03d}_sparse.obj'))
                 misc.save_tensor_to_obj(dense_points, os.path.join(args.experiment_path, 'obj_output', f'{shapenet_dict[taxonomy_id]}_{model_id}_{idx:03d}_output.obj'))

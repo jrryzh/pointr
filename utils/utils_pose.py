@@ -77,6 +77,12 @@ def uniform_sample(vertices, faces, n_samples, with_normal=False):
     return sampled_points
 
 
+def apply_transformation(vertices, transformation_matrix):
+    num_vertices = vertices.shape[0]
+    homogenous_vertices = np.hstack([vertices, np.ones((num_vertices, 1))])
+    transformed_vertices = homogenous_vertices.dot(transformation_matrix.T)
+    return transformed_vertices[:, :3]
+
 def farthest_point_sampling(points, n_samples):
     """ Farthest point sampling.
 
