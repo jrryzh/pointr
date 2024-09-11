@@ -944,3 +944,20 @@ def draw_detections(img, out_dir, data_name, img_id, intrinsics, pred_sRT, pred_
     cv2.imwrite(out_path, img)
     # cv2.imshow('vis', img)
     # cv2.waitKey(0)
+    
+    
+
+def generate_rotate_y_matrix(angle_deg):
+    rotate_mat_list = []
+    for i in range(360 // angle_deg):
+        angle_rad = np.radians(angle_deg * i)
+        cos, sin = np.cos(angle_rad), np.sin(angle_rad)
+        # 齐次变换矩阵
+        rotation_matrix = np.array([
+            [cos, 0, sin],
+            [0, 1, 0],
+            [-sin, 0, cos]
+        ])
+        rotate_mat_list.append(rotation_matrix)
+    
+    return rotate_mat_list

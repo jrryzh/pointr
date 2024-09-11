@@ -187,7 +187,6 @@ if __name__ == '__main__':
         # save_to_obj_pts(data['partial'], os.path.join(save_path, f"partial_normalize_{idx}.obj"))
         # save_to_obj_pts(data['gt'], os.path.join(save_path, f"complete_normalize_{idx}.obj"))
         #############################################
-        
         # 将pointr提供的npy旋转为我们flip后的结果
         convert_matrix = np.array([
             [1, 0,  0],
@@ -224,13 +223,21 @@ if __name__ == '__main__':
         print(f'size mat 2, {size_mat}')       
         ##################
         
-        ##### draw #####
+        #### draw #####
         cam_fx, cam_fy, cam_cx, cam_cy = 591.0125, 590.16775, 322.525, 244.11084
         intrinsics = np.array([[cam_fx, 0,      cam_cx],
                             [0,      cam_fy, cam_cy],
                             [0,      0,      1     ]])
         
-        utils_pose.draw_detections(img, '/home/fudan248/zhangjinyu/code_repo/PoinTr/tmp/0911', 'd435', f'{idx:04}', intrinsics, np.expand_dims(_pose, 0), np.expand_dims(size_mat, 0), [-1])
+        y_rotat_mat_list = utils_pose.generate_rotate_y_matrix(30)
+        
+        for mat_id, mat in enumerate(y_rotat_mat_list):
+            _pose[:3, :3] = mat @ _pose[:3, :3]
+            _img = img.copy()
+            utils_pose.draw_detections(_img, '/home/fudan248/zhangjinyu/code_repo/PoinTr/tmp/0911', 'd435', f'{idx:04}_{mat_id}', intrinsics, np.expand_dims((_pose), 0), np.expand_dims(size_mat, 0), [-1])
+        
+        break
+        ######### SAVE ##########
         # save_path = "/home/fudan248/zhangjinyu/code_repo/PoinTr/tmp/0909"
         # save_to_obj_pts(_complete_pc, os.path.join(save_path, f"complete_pc_cam_{idx}.obj"))
         # save_to_obj_pts(partial_pc, os.path.join(save_path, f"partial_pc_cam_{idx}.obj"))
