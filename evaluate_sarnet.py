@@ -29,7 +29,7 @@ from utils import parser as model_parser
 
 
 # model(depreciated: sarnet)
-from utils.utils_pose import load_obj, load_depth, save_to_obj_pts, pc_normalize, get_bbox, compute_mAP, plot_mAP, draw_detections
+from utils.utils_pose import load_obj, load_depth, save_to_obj_pts, pc_normalize, get_bbox, compute_mAP, plot_mAP, draw_detections, _draw_detections
 
 # seg 3D
 from utils.config_seg3d import args as seg3d_args
@@ -366,9 +366,9 @@ def estimate():
         with open(save_path, 'wb') as f:
             cPickle.dump(result, f)
         # TODO: DEBUG: draw result
-        draw_detections(raw_rgb[:, :, ::-1], result_folder, 'd435', f'{img_count:04}', intrinsics, f_sRT, f_size, f_class_id,
+        _draw_detections(raw_rgb[:, :, ::-1], result_folder, 'd435', f'{img_count:04}', intrinsics, f_sRT, f_size, f_class_id,
             [], [], [], [], [], [], draw_gt=False, draw_nocs=False)
-        # import ipdb; ipdb.set_trace()
+        import ipdb; ipdb.set_trace()
     # write statistics
     fw = open('{0}/eval_logs.txt'.format(result_folder), 'a')
     messages = []

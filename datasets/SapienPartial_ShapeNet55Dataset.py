@@ -83,8 +83,11 @@ class SapienPartial_ShapeNet(data.Dataset):
         # self.npoints = config.N_POINTS
         self.obj_path = config.OBJ_PATH
         # self.data_list_file = os.path.join(self.data_root, f'{self.subset}.txt')
-        # DEBUG: nocs
-        self.data_list_file = os.path.join(self.data_root, f'300view_nocs_result_list.txt')
+        # if self.subset == 'train':
+        #     self.data_list_file = os.path.join(self.data_root, f'300view_nocs_train_list.txt')
+        # elif self.subset == 'val' or self.subset == 'test':
+        #     self.data_list_file = os.path.join(self.data_root, f'300view_nocs_test_list.txt')
+        self.data_list_file = os.path.join(self.data_root, f'300view_nocs_train_list.txt')
 
         print(f'[DATASET] Open file {self.data_list_file}')
         with open(self.data_list_file, 'r') as f:
@@ -95,17 +98,18 @@ class SapienPartial_ShapeNet(data.Dataset):
             line = line.strip()
             taxonomy_id = categories[line.split('/')[-2]]
             model_id = line.split('/')[-1]
-            for idx in range(300):
+            for idx in range(500):
                 self.file_list.append({
                         'taxonomy_id': taxonomy_id,
                         'model_id': model_id,
                         # 'obj_path': os.path.join(obj_path, taxonomy_id, model_id, 'models', 'model_normalized.obj'),
                         'obj_path': os.path.join(self.obj_path, f'{taxonomy_id}-{model_id}.npy'),
                         'pose_path': os.path.join(line, f'{idx:04}_pose.txt'),
-                        'pcd_path': os.path.join(line, f'{idx:04}_pcd.obj')
+                        'pcd_path': os.path.join(line, f'{idx:04}_pcd.obj'),
+                        'rgb_path': os.path.join(line, f'{idx:04}_rgb.png')
                     })
 
-        # # DEBUG
+        # DEBUG
         # self.file_list = self.file_list[:300]
         
         print(f'[DATASET] {len(self.file_list)} instances were loaded')
@@ -138,26 +142,39 @@ class SapienPartial_ShapeNet(data.Dataset):
         _complete_pc = np.load(sample['obj_path'])
         _complete_pc = _complete_pc @ convert_matrix
         _pose = np.loadtxt(sample['pose_path'])
+        # in camera coordinate
         partial_pc, _ = utils_pose.load_obj(sample['pcd_path'])
         complete_pc = utils_pose.apply_transformation(_complete_pc, _pose)
         # TODO：对partial_pc做一步采样，先设置为2048
         np.random.seed(idx)
         sample_idx = np.random.choice(partial_pc.shape[0], size=1024, replace=True)
         partial_pc = partial_pc[sample_idx]
-
+        # in partial coordinate
         data['partial'], centroid, scale = misc.pc_normalize(partial_pc)
         data['gt'] = (complete_pc - centroid) / scale
         
         ##### R T s #####
-        rotate_mat = convert_rotation.single_rotation_matrix_to_ortho6d(_pose[:3, :3]).flatten()
-        trans_mat = _pose[:3, 3].flatten()
+        # rotate_mat = convert_rotation.single_rotation_matrix_to_ortho6d(_pose[:3, :3]).flatten()
+        trans_mat = (_pose[:3, 3].flatten() - centroid) / scale
         min_x, max_x = np.min(_complete_pc[:, 0]), np.max(_complete_pc[:, 0])
         min_y, max_y = np.min(_complete_pc[:, 1]), np.max(_complete_pc[:, 1])
         min_z, max_z = np.min(_complete_pc[:, 2]), np.max(_complete_pc[:, 2])
         size_mat = np.array(((max_x - min_x) / scale, (max_y - min_y) / scale, (max_z - min_z) / scale)) 
+        
+        #### 这里多给几个rotate #####
+        if sample['taxonomy_id'] in ['02876657', '02880940', '02946921']:
+            z_rotate_mats = utils_pose.generate_rotate_z_matrix(30)
+            rotate_mats = [_pose[:3, :3] @ z_mat for z_mat in z_rotate_mats]
+            ortho6d_list = [convert_rotation.single_rotation_matrix_to_ortho6d(mat).flatten() for mat in rotate_mats]
+            rotate_mat = np.stack(ortho6d_list, axis=0)
+        else:
+            rotate_mat = np.expand_dims(convert_rotation.single_rotation_matrix_to_ortho6d(_pose[:3, :3]).flatten(), axis=0).repeat(12, axis=0)
         ##################
         
-        return sample['taxonomy_id'], sample['model_id'], (data['partial'].astype(np.float32), data['gt'].astype(np.float32), rotate_mat.astype(np.float32), trans_mat.astype(np.float32), size_mat.astype(np.float32))
+        if self.subset == 'train' or self.subset == 'val':
+            return sample['taxonomy_id'], sample['model_id'], (data['partial'].astype(np.float32), data['gt'].astype(np.float32), rotate_mat.astype(np.float32), trans_mat.astype(np.float32), size_mat.astype(np.float32))
+        else:
+            return sample['taxonomy_id'], sample['model_id'], (data['partial'].astype(np.float32), data['gt'].astype(np.float32), rotate_mat.astype(np.float32), trans_mat.astype(np.float32), size_mat.astype(np.float32), centroid.astype(np.float32), scale.astype(np.float32), sample['rgb_path'])
 
     def __len__(self):
         return len(self.file_list)

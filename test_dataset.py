@@ -1,7 +1,5 @@
 import os
-import torch
 import numpy as np
-import torch.utils.data as data
 import logging
 import random
 import cv2
@@ -10,7 +8,6 @@ from utils import misc
 from utils import utils_pose
 from utils import convert_rotation
 
-from torch.utils.data import DataLoader
 
 
 _categories = {
@@ -116,7 +113,7 @@ if __name__ == '__main__':
     #         })
     #     if idx == 2:
     #         break
-    data_list_file = os.path.join(data_root, f'300view_nocs_result_list.txt')
+    data_list_file = os.path.join(data_root, f'300view_nocs_train_list.txt')
 
     print(f'[DATASET] Open file {data_list_file}')
     with open(data_list_file, 'r') as f:
@@ -127,16 +124,16 @@ if __name__ == '__main__':
         line = line.strip()
         taxonomy_id = categories[line.split('/')[-2]]
         model_id = line.split('/')[-1]
-        for idx in range(300):
+        for idx in [1, 200, 300]:
             file_list.append({
                     'taxonomy_id': taxonomy_id,
                     'model_id': model_id,
                     'obj_path': os.path.join(obj_path, f'{taxonomy_id}-{model_id}.npy'),
                     'pose_path': os.path.join(line, f'{idx:04}_pose.txt'),
                     'pcd_path': os.path.join(line, f'{idx:04}_pcd.obj'),
-                    'img_path': os.path.join(line, f'{idx:04}_rgb.png')
+                    'img_path': os.path.join(line, f'{idx:04}_rgb.png'),
+                    'instrinstic_path': os.path.join(line, f'intrinsic.txt')
                 })
-        break
 
     for idx in range(10):
         print(f"sample {idx}: {file_list[idx]}")
@@ -219,28 +216,42 @@ if __name__ == '__main__':
         min_x, max_x = np.min(_complete_pc[:, 0]), np.max(_complete_pc[:, 0])
         min_y, max_y = np.min(_complete_pc[:, 1]), np.max(_complete_pc[:, 1])
         min_z, max_z = np.min(_complete_pc[:, 2]), np.max(_complete_pc[:, 2])
-        size_mat = np.array(((max_x - min_x) / scale, (max_y - min_y) / scale, (max_z - min_z) / scale)) 
+        size_mat = np.array(((max_x - min_x) , (max_y - min_y) , (max_z - min_z) )) 
+        import ipdb; ipdb.set_trace()
         print(f'size mat 2, {size_mat}')       
         ##################
         
         #### draw #####
-        cam_fx, cam_fy, cam_cx, cam_cy = 591.0125, 590.16775, 322.525, 244.11084
-        intrinsics = np.array([[cam_fx, 0,      cam_cx],
-                            [0,      cam_fy, cam_cy],
-                            [0,      0,      1     ]])
+        # cam_fx, cam_fy, cam_cx, cam_cy = 591.0125, 590.16775, 322.525, 244.11084
+        # intrinsics = np.array([[cam_fx, 0,      cam_cx],
+        #                     [0,      cam_fy, cam_cy],
+        #                     [0,      0,      1     ]])
+        intrinsics = np.loadtxt(sample['instrinstic_path'])
         
-        y_rotat_mat_list = utils_pose.generate_rotate_y_matrix(30)
+        ### 旋转draw #####
+        y_rotat_mat_list = utils_pose.generate_rotate_z_matrix(30)
         
         for mat_id, mat in enumerate(y_rotat_mat_list):
-            _pose[:3, :3] = mat @ _pose[:3, :3]
+            new_pose = _pose.copy()
+            new_pose[:3, :3] =  _pose[:3, :3] @ mat
+            # new_pose[:3, 3] = mat @ _pose[:3, 3]
             _img = img.copy()
-            utils_pose.draw_detections(_img, '/home/fudan248/zhangjinyu/code_repo/PoinTr/tmp/0911', 'd435', f'{idx:04}_{mat_id}', intrinsics, np.expand_dims((_pose), 0), np.expand_dims(size_mat, 0), [-1])
+            utils_pose.draw_detections(_img, '/home/fudan248/zhangjinyu/code_repo/PoinTr/tmp/0913', 'd435', f'{idx:04}_{mat_id}', intrinsics, np.expand_dims((new_pose), 0), np.expand_dims(size_mat, 0), [-1])
+        # ###########################
+        # _pose[:3, 3] = _pose[:3, :3].T @ _pose[:3, 3] #new_added
+        # _pose[1:3, 3] *=-1     
+        # # change
+        # _pose[0, 3], _pose[1, 3] = _pose[1, 3], _pose[0, 3].copy()
+        # _pose[2, 3], _pose[1, 3] = _pose[1, 3], _pose[2, 3].copy()
+        # _pose[:3, 3] = _pose[:3, :3] @ _pose[:3, 3] #new_added
         
-        break
+        # utils_pose.draw_detections(img, '/home/fudan248/zhangjinyu/code_repo/PoinTr/tmp/0912', 'd435', f'{idx:04}_', intrinsics, np.expand_dims((_pose), 0), np.expand_dims(size_mat, 0), [-1])
+        
+        
         ######### SAVE ##########
-        # save_path = "/home/fudan248/zhangjinyu/code_repo/PoinTr/tmp/0909"
-        # save_to_obj_pts(_complete_pc, os.path.join(save_path, f"complete_pc_cam_{idx}.obj"))
-        # save_to_obj_pts(partial_pc, os.path.join(save_path, f"partial_pc_cam_{idx}.obj"))
+        save_path = "/home/fudan248/zhangjinyu/code_repo/PoinTr/tmp/0911_pcs"
+        save_to_obj_pts(complete_pc, os.path.join(save_path, f"complete_pc_cam_{idx}.obj"))
+        save_to_obj_pts(partial_pc, os.path.join(save_path, f"partial_pc_cam_{idx}.obj"))
         
         # save_to_obj_pts(data['partial'], os.path.join(save_path, f"partial_normalize_{idx}.obj"))
         # save_to_obj_pts(data['gt'], os.path.join(save_path, f"complete_normalize_{idx}.obj"))

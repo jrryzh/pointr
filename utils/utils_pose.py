@@ -150,7 +150,6 @@ def load_obj(path_to_file):
     faces = np.asarray(faces)
     return vertices, faces
 
-
 def load_depth(img_path):
     """ Load depth image from img_path. """
     depth_path = img_path + '_depth.png'
@@ -957,6 +956,36 @@ def generate_rotate_y_matrix(angle_deg):
             [cos, 0, sin],
             [0, 1, 0],
             [-sin, 0, cos]
+        ])
+        rotate_mat_list.append(rotation_matrix)
+    
+    return rotate_mat_list
+
+def generate_rotate_z_matrix(angle_deg):
+    rotate_mat_list = []
+    for i in range(360 // angle_deg):
+        angle_rad = np.radians(angle_deg * i)
+        cos, sin = np.cos(angle_rad), np.sin(angle_rad)
+        # Rotation matrix for Z-axis
+        rotation_matrix = np.array([
+            [cos, -sin, 0],
+            [sin, cos, 0],
+            [0, 0, 1]
+        ])
+        rotate_mat_list.append(rotation_matrix)
+        
+    return rotate_mat_list
+
+def generate_rotate_x_matrix(angle_deg):
+    rotate_mat_list = []
+    for i in range(360 // angle_deg):
+        angle_rad = np.radians(angle_deg * i)
+        cos, sin = np.cos(angle_rad), np.sin(angle_rad)
+        # Rotation matrix for X-axis
+        rotation_matrix = np.array([
+            [1, 0, 0],
+            [0, cos, -sin],
+            [0, sin, cos]
         ])
         rotate_mat_list.append(rotation_matrix)
     

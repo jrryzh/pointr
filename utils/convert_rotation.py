@@ -5,28 +5,24 @@ import numpy as np
 
 
 def single_rotation_matrix_to_ortho6d(R):
-    # 提取旋转矩阵的前两列
-    R_2cols = R[:, 0:2]
-    # 将前两列展成一个6维向量
-    ortho6d = R_2cols.flatten()
-    return ortho6d
+    return np.concatenate((R[:,0], R[:,1]))
+
+
+# 定义归一化函数
+def normalize(v):
+    norm = np.linalg.norm(v)
+    if norm == 0: 
+       return v
+    return v / norm
+
 
 def single_rotation_matrix_from_ortho6d(ortho6d):
-    assert ortho6d.shape == (6,), "Input must be a 6-dimensional vector."
-
-    r1 = ortho6d[:3]
-    r2 = ortho6d[3:]
-
-    r1 = r1 / np.linalg.norm(r1)
+    a1 = ortho6d[:3]
+    a2 = ortho6d[3:6]
     
-    r2 = r2 - np.dot(r2, r1) * r1
-    r2 = r2 / np.linalg.norm(r2)
+    a3 = np.cross(a1, a2)
     
-    r3 = np.cross(r1, r2)
-    
-    rotation_matrix = np.stack((r1, r2, r3), axis=-1)
-    
-    return rotation_matrix
+    return np.stack((a1, a2, a3), axis=1)
 
 #rotation5d batch*5
 def normalize_5d_rotation( r5d):

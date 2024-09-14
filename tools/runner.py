@@ -9,6 +9,10 @@ from utils.logger import *
 from utils.AverageMeter import AverageMeter
 from utils.metrics import Metrics
 from extensions.chamfer_dist import ChamferDistanceL1, ChamferDistanceL2
+from utils.utils_pose import draw_detections
+import cv2
+import numpy as np
+from utils import convert_rotation
 
 import json
 shapenet_dict = json.load(open('./data/shapenet_synset_dict.json', 'r'))
@@ -270,8 +274,17 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
             dense_loss_l1 =  ChamferDisL1(dense_points, gt)
             dense_loss_l2 =  ChamferDisL2(dense_points, gt)
             
-            ############### rotate matrix loss ################
-            rotat_loss = nn.SmoothL1Loss()(pred_rotat_mat, gt_rotate_mat)
+            ############### pose matrix loss ################
+            ## gpt implementation
+            loss_fn = nn.SmoothL1Loss()
+            # print('pred_rotat_mat[0].shape,', pred_rotat_mat[0].shape)
+            # print('gt_rotate_mat[0].shape,', gt_rotate_mat[0].shape)
+            # print('gt_mat.shape,', gt_rotate_mat[0][0].shape)
+            losses = torch.tensor([loss_fn(pred_rotat_mat[0], gt_mat) for gt_mat in gt_rotate_mat[0]])
+            idx = torch.argmin(losses)
+            # print('idx', idx)
+            rotat_loss = loss_fn(gt_rotate_mat[0][idx], pred_rotat_mat)
+            # rotat_loss = nn.SmoothL1Loss()(pred_rotat_mat, gt_rotate_mat)
             trans_loss = nn.SmoothL1Loss()(pred_trans_mat, gt_trans_mat)
             size_loss = nn.SmoothL1Loss()(pred_size_mat, gt_size_mat)
             ##################################################
@@ -412,9 +425,11 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
 
     with torch.no_grad():
         for idx, (taxonomy_ids, model_ids, data) in enumerate(test_dataloader):
+            if idx % 2333 != 0:
+                continue
             # DEBUG
-            print(f"Batch {idx} - data shape: {[d.shape for d in data]}") 
-            import ipdb; ipdb.set_trace()
+            # import ipdb; ipdb.set_trace()
+            # print(f"Batch {idx} - data shape: {[d.shape for d in data]}") 
             taxonomy_id = taxonomy_ids[0] if isinstance(taxonomy_ids[0], str) else taxonomy_ids[0].item()
             model_id = model_ids[0]
 
@@ -482,7 +497,7 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 )
                 continue
 
-            elif dataset_name == "PartialSpace_ShapeNet":
+            elif dataset_name == "SapienPartial_ShapeNet" or dataset_name == 'PartialSpace_ShapeNet':
                 partial = data[0].cuda()
                 gt = data[1].cuda()
                 gt_rotate_mat = data[2].cuda()
@@ -495,6 +510,10 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 pred_rotat_mat = ret[2]
                 pred_trans_mat = ret[3]
                 pred_size_mat = ret[4]
+                
+                centroid = data[5]
+                scale = data[6]
+                rgb_path = data[7][0]
 
                 sparse_loss_l1 =  ChamferDisL1(coarse_points, gt)
                 sparse_loss_l2 =  ChamferDisL2(coarse_points, gt)
@@ -502,9 +521,19 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 dense_loss_l2 =  ChamferDisL2(dense_points, gt)
 
                 ############### pose matrix loss ################
-                rotat_loss = dist_utils.reduce_tensor(rotat_loss, args)
-                trans_loss = dist_utils.reduce_tensor(trans_loss, args)
-                size_loss = dist_utils.reduce_tensor(size_loss, args)
+                loss_fn = nn.SmoothL1Loss()
+                # print('pred_rotat_mat[0].shape,', pred_rotat_mat[0].shape)
+                # print('gt_rotate_mat[0].shape,', gt_rotate_mat[0].shape)
+                # print('gt_mat.shape,', gt_rotate_mat[0][0].shape)
+                losses = torch.tensor([loss_fn(pred_rotat_mat[0], gt_mat) for gt_mat in gt_rotate_mat[0]])
+                min_idx = torch.argmin(losses)
+                rotat_loss = loss_fn(gt_rotate_mat[0][min_idx], pred_rotat_mat[0])
+                # rotat_loss = nn.SmoothL1Loss()(pred_rotat_mat, gt_rotate_mat)
+                trans_loss = nn.SmoothL1Loss()(pred_trans_mat, gt_trans_mat)
+                size_loss = nn.SmoothL1Loss()(pred_size_mat, gt_size_mat)
+                # rotat_loss = dist_utils.reduce_tensor(rotat_loss, args)
+                # trans_loss = dist_utils.reduce_tensor(trans_loss, args)
+                # size_loss = dist_utils.reduce_tensor(size_loss, args)
                 ##################################################
                 
                 if config.model.NAME == "AdaPoinTr_Pose":
@@ -522,21 +551,65 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
             else:
                 raise NotImplementedError(f'Test phase do not support {dataset_name}')
 
-            if (idx+1) % 200 == 0:
+            ################## NOTE: DEBUG SAVE PC ####################
+            # if (idx+1) % 200 == 0:
+            if False:
                 print_log('Test[%d/%d] Taxonomy = %s Sample = %s Losses = %s Metrics = %s' %
                             (idx + 1, n_samples, taxonomy_id, model_id, ['%.4f' % l for l in test_losses.val()], 
                             ['%.4f' % m for m in _metrics]), logger=logger)
-                
-                ################## NOTE: DEBUG SAVE ####################
-                # sample from 10518
                 if not os.path.exists(os.path.join(args.experiment_path, 'obj_output')):
                     os.mkdir(os.path.join(args.experiment_path, 'obj_output'))
                 misc.save_tensor_to_obj(partial, os.path.join(args.experiment_path, 'obj_output', f'{shapenet_dict[taxonomy_id]}_{model_id}_{idx:03d}_input.obj'))
                 misc.save_tensor_to_obj(coarse_points, os.path.join(args.experiment_path, 'obj_output', f'{shapenet_dict[taxonomy_id]}_{model_id}_{idx:03d}_sparse.obj'))
                 misc.save_tensor_to_obj(dense_points, os.path.join(args.experiment_path, 'obj_output', f'{shapenet_dict[taxonomy_id]}_{model_id}_{idx:03d}_output.obj'))
                 misc.save_tensor_to_obj(gt, os.path.join(args.experiment_path, 'obj_output', f'{shapenet_dict[taxonomy_id]}_{model_id}_{idx:03d}_gt.obj'))
+                # import ipdb; ipdb.set_trace()
+            ############################################################
+            
+            ################## NOTE: DEBUG SAVE DETECTION IMG ####################
+            # if (idx+1) % 2333 == 0:
+            if True:
+                print('save new obj...')
+                ########### Preditction ############
+                pred_size_mat_np = pred_size_mat.cpu().detach().numpy().squeeze()
+                pred_rotat_mat_np = pred_rotat_mat.cpu().detach().numpy().squeeze()
+                pred_trans_mat_np = pred_trans_mat.cpu().detach().numpy().squeeze()
+                centroid_np = centroid.cpu().detach().numpy().squeeze()
+                scale_np = scale.cpu().detach().numpy().squeeze()
+                # sample from 10518
+                intrinsics = np.loadtxt('/home/fudan248/zhangjinyu/code_repo/PoinTr/data/SapienRendered/sapien_output/ashcan/1c3cf618a6790f1021c6005997c63924/intrinsic.txt')
+                img = cv2.imread(rgb_path)
+                pred_sRT = np.identity(4, dtype=float)
+                pred_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(pred_rotat_mat_np)
+                pred_sRT[0, 3] = pred_trans_mat_np[0] * scale_np + centroid_np[0]
+                pred_sRT[1, 3] = pred_trans_mat_np[1] * scale_np + centroid_np[1]
+                pred_sRT[2, 3] = pred_trans_mat_np[2] * scale_np + centroid_np[2]
+                f_sRT = scale_np * pred_size_mat_np
                 
-                ############################################################
+                if not os.path.exists(os.path.join(args.experiment_path, 'img_out')):
+                    os.mkdir(os.path.join(args.experiment_path, 'img_out'))
+                _img = img.copy()
+                draw_detections(img, os.path.join(args.experiment_path, 'img_out'), 'train_data', f'{idx:04}', intrinsics, np.expand_dims((pred_sRT), 0), np.expand_dims(f_sRT, 0), [-1]) # np.expand_dims((pred_sRT), 0), np.expand_dims(f_sRT, 0)
+                #######################################
+                
+                ############### GT ####################
+                # import ipdb; ipdb.set_trace()
+                gt_size_mat_np = gt_size_mat.cpu().detach().numpy().squeeze()
+                gt_rotate_mat_np = gt_rotate_mat.cpu().detach().numpy().squeeze()
+                gt_trans_mat_np = gt_trans_mat.cpu().detach().numpy().squeeze()
+                gt_sRT = np.identity(4, dtype=float)
+                gt_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(gt_rotate_mat_np[0])
+                gt_sRT[0, 3] = gt_trans_mat_np[0]* scale_np + centroid_np[0]
+                gt_sRT[1, 3] = gt_trans_mat_np[1]* scale_np + centroid_np[1]
+                gt_sRT[2, 3] = gt_trans_mat_np[2]* scale_np + centroid_np[2]
+                f_sRT = scale_np * gt_size_mat_np
+                
+                
+                draw_detections(_img, os.path.join(args.experiment_path, 'img_out'), 'train_data', f'{idx:04}_gt', intrinsics, np.expand_dims((gt_sRT), 0), np.expand_dims(f_sRT, 0), [-1]) # np.expand_dims((pred_sRT), 0), np.expand_dims(f_sRT, 0)
+                #######################################
+                
+                
+            ############################################################
                 
             
         if dataset_name == 'KITTI':

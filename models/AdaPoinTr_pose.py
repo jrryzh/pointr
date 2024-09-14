@@ -987,7 +987,35 @@ class AdaPoinTr_Pose(nn.Module):
         loss_recon = loss_coarse + loss_fine
         
         # pose loss
-        loss_rotat = nn.SmoothL1Loss()(pred_rotat_mat, gt_rotat_mat)
+        # loss_rotat = nn.SmoothL1Loss()(pred_rotat_mat, gt_rotat_mat)
+        # 做个修改，这里rotate_mat 变成（12， 6）了 先匹配loss最小的再返回那个loss
+        ## my implemenation
+        # minloss_pred_rotat_mat_list = []
+        # for gt_rotat_mat, pred_rotat_mat_lst in zip(gt_rotat_mat, pred_rotat_mat):
+        #     idx = torch.argmin([nn.SmoothL1Loss()(pred_rotat_mat, gt_rotat_mat) for pred_rotat_mat in pred_rotat_mat_lst])
+        #     minloss_pred_rotat_mat_list.append(pred_rotat_mat_lst[idx])
+        # loss_rotat = nn.SmoothL1Loss()(torch.stack(minloss_pred_rotat_mat_list), gt_rotat_mat)
+        
+        ## gpt implementation
+        minloss_gt_rotat_mat_list = []
+        loss_fn = nn.SmoothL1Loss()
+        # print('检查原始输入')
+        # print('gt_rotat_mat.shape', gt_rotat_mat.shape)
+        # print('pred_rotat_mat.shape', pred_rotat_mat.shape)
+        
+        for gt_mat_list, pred_mat in zip(gt_rotat_mat, pred_rotat_mat):
+            # print('检查内部输入')
+            # print('gt_mat_list.shape', gt_mat_list.shape)
+            # print('pred_mat.shape', pred_mat.shape)
+            # print('gt_mat_list[0].shape', gt_mat_list[0].shape)
+            losses = torch.tensor([loss_fn(pred_mat, gt_mat) for gt_mat in gt_mat_list])
+            idx = torch.argmin(losses)
+            # print('idx', idx)
+            minloss_gt_rotat_mat_list.append(gt_mat_list[idx])
+
+        minloss_gt_rotat_mat_stack = torch.stack(minloss_gt_rotat_mat_list)
+        # print('minloss_gt_rotat_mat_stack.shape, pred_rotat_mat.shape', minloss_gt_rotat_mat_stack.shape, pred_rotat_mat.shape)
+        loss_rotat = loss_fn(minloss_gt_rotat_mat_stack, pred_rotat_mat)
         loss_trans = nn.SmoothL1Loss()(pred_trans_mat, gt_trans_mat)
         loss_size = nn.SmoothL1Loss()(pred_size_mat, gt_size_mat)
 
