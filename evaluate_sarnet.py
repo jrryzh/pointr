@@ -261,11 +261,11 @@ def estimate():
             input_pcd_tensor = torch.from_numpy(input_pcd).unsqueeze(0).contiguous()
             input_pcd_tensor = input_pcd_tensor.cuda().float()
             
-            if opt.pcd_isSave:
-                scene_id = path.split('/')[-2].split('_')[-1]
-                image_id = path.split('/')[-1]
-                create_folder(opt.output_pcd_folder)
-                save_to_obj_pts(input_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_final_input.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+            # if opt.pcd_isSave:
+            #     scene_id = path.split('/')[-2].split('_')[-1]
+            #     image_id = path.split('/')[-1]
+            #     create_folder(opt.output_pcd_folder)
+            #     save_to_obj_pts(input_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_final_input.obj'.format(scene_id, image_id, categories[cate_id + 1])))
             
             
             ret = base_model(input_pcd_tensor)
@@ -281,10 +281,10 @@ def estimate():
                 scene_id = path.split('/')[-2].split('_')[-1]
                 image_id = path.split('/')[-1]
                 create_folder(opt.output_pcd_folder)
-                save_to_obj_pts(input_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_input.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+                save_to_obj_pts(input_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_final_input.obj'.format(scene_id, image_id, categories[cate_id + 1])))
                 save_to_obj_pts(coarse_points_np, os.path.join(opt.output_pcd_folder, '{}_{}_{}_coarse_complete.obj'.format(scene_id, image_id, categories[cate_id + 1])))
                 save_to_obj_pts(dense_points_np, os.path.join(opt.output_pcd_folder, '{}_{}_{}_dense_complete.obj'.format(scene_id, image_id, categories[cate_id + 1])))
-                print(f"保存输入 pc: {os.path.join(opt.output_pcd_folder, '{}_{}_{}_input.obj'.format(scene_id, image_id, categories[cate_id + 1]))}")
+                print(f"保存输入 pc: {os.path.join(opt.output_pcd_folder, '{}_{}_{}_final_input.obj'.format(scene_id, image_id, categories[cate_id + 1]))}")
                 print(f"保存补全后coarse pc: {os.path.join(opt.output_pcd_folder, '{}_{}_{}_coarse_complete.obj'.format(scene_id, image_id, categories[cate_id + 1]))}")
                 print(f"保存补全后dense pc: {os.path.join(opt.output_pcd_folder, '{}_{}_{}_dense_complete.obj'.format(scene_id, image_id, categories[cate_id + 1]))}")
             # import ipdb; ipdb.set_trace()
@@ -329,15 +329,21 @@ def estimate():
                 [0, 0, -1]
             ])
             pred_trans_mat_np = pred_trans_mat_np @ train_to_test_mat
+            pred_size_mat_np = pred_size_mat_np @ train_to_test_mat
+            # pred_rotat_mat_np = pred_rotat_mat_np @ train_to_test_mat
             
             # f_size[i] = pred_size_mat_np * s_factor * s_factor_seg
-            f_size[i] = pred_size_mat_np
+            f_size[i] = pred_size_mat_np * s_factor * s_factor_seg
             pred_sRT = np.identity(4, dtype=float)
-            pred_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(pred_rotat_mat_np)
+            pred_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(pred_rotat_mat_np)  @ train_to_test_mat 
             cluster_center = np.mean(_input_pcd, axis=1) # obsv_pcd: 初始 _input_pcd: 正则化后 input_pcd: 旋转后
             pred_sRT[0, 3] = (centroid_seg[0] + (centroid[0] + (cluster_center[0] + pred_trans_mat_np[0]) * s_factor) * s_factor_seg)
             pred_sRT[1, 3] = -(centroid_seg[1] + (centroid[1] + (cluster_center[1] + pred_trans_mat_np[1]) * s_factor) * s_factor_seg)
             pred_sRT[2, 3] = -(centroid_seg[2] + (centroid[2] + (cluster_center[2] + pred_trans_mat_np[2]) * s_factor) * s_factor_seg)
+            # pred_sRT[0, 3] = pred_trans_mat_np[0]
+            # pred_sRT[1, 3] = pred_trans_mat_np[1]
+            # pred_sRT[2, 3] = pred_trans_mat_np[2]
+            
             f_sRT[i] = pred_sRT
 
             inst_count += 1
@@ -368,7 +374,7 @@ def estimate():
         # TODO: DEBUG: draw result
         _draw_detections(raw_rgb[:, :, ::-1], result_folder, 'd435', f'{img_count:04}', intrinsics, f_sRT, f_size, f_class_id,
             [], [], [], [], [], [], draw_gt=False, draw_nocs=False)
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
     # write statistics
     fw = open('{0}/eval_logs.txt'.format(result_folder), 'a')
     messages = []
@@ -458,7 +464,7 @@ if __name__ == "__main__":
     parser.add_argument('--config',help='config file path')
     parser.add_argument('--ckpts', help='ckpt')
     ##### 等待优化掉 #######
-    parser.add_argument('--data_type', type=str, default='real_test', help='cam_val, real_test')
+    parser.add_argument('--data_type', type=str, default='cam_val', help='cam_val, real_test')
     parser.add_argument('--data_folder', type=str, default='./data/NOCS', help='data directory')
     parser.add_argument('--results_folder', type=str, default='./results/NOCS', help='root path for saving results')
     # parser.add_argument('--temp_folder', type=str, default='../data/NOCS/template_FPS', help='root path for saving template')
@@ -468,7 +474,7 @@ if __name__ == "__main__":
     parser.add_argument('--detect_network', type=str, default='mrcnn', help='[mrcnn, yolo, ...]]')
     parser.add_argument('--GCN3D_isNeed', type=str2bool, default=True, help='add 3d point segmentation 3DGCN')
     parser.add_argument('--pcd_isSave', type=str2bool, default=True, help='save immediate point cloud')
-    parser.add_argument('--output_pcd_folder', type=str, default='./tmp/test0908/', help='path of immediate point cloud')
+    parser.add_argument('--output_pcd_folder', type=str, default='./tmp/test0913/', help='path of immediate point cloud')
     parser.add_argument('--GCN3D_model_path', type=str, default='./ckpts/20210530_5.pth', help='model path of 3DGCN')
     
     opt = parser.parse_args()
