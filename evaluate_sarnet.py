@@ -110,7 +110,7 @@ def estimate():
                 for line in open(os.path.join(opt.data_folder, file_path))]
 
     # TODO: img_list 先取前10
-    img_list = img_list[:10]
+    img_list = img_list[:100]
     #########################
     
     inst_count = 0
@@ -137,6 +137,9 @@ def estimate():
         num_insts = len(mrcnn_result['pred_class_ids'])
         f_sRT = np.zeros((num_insts, 4, 4), dtype=float)
         f_size = np.zeros((num_insts, 3), dtype=float)
+        
+        gt_f_sRT = np.zeros((num_insts, 4, 4), dtype=float)
+        gt_f_size = np.zeros((num_insts, 3), dtype=float)
         
         # TODO: DEBUG: 观察添加对称效果有何作用
         f_class_id = mrcnn_result['pred_class_ids']
@@ -329,13 +332,13 @@ def estimate():
                 [0, 0, -1]
             ])
             pred_trans_mat_np = pred_trans_mat_np @ train_to_test_mat
-            pred_size_mat_np = pred_size_mat_np @ train_to_test_mat
+            # pred_size_mat_np = pred_size_mat_np @ train_to_test_mat
             # pred_rotat_mat_np = pred_rotat_mat_np @ train_to_test_mat
             
             # f_size[i] = pred_size_mat_np * s_factor * s_factor_seg
             f_size[i] = pred_size_mat_np * s_factor * s_factor_seg
             pred_sRT = np.identity(4, dtype=float)
-            pred_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(pred_rotat_mat_np)  @ train_to_test_mat 
+            pred_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(pred_rotat_mat_np) @ train_to_test_mat 
             cluster_center = np.mean(_input_pcd, axis=1) # obsv_pcd: 初始 _input_pcd: 正则化后 input_pcd: 旋转后
             pred_sRT[0, 3] = (centroid_seg[0] + (centroid[0] + (cluster_center[0] + pred_trans_mat_np[0]) * s_factor) * s_factor_seg)
             pred_sRT[1, 3] = -(centroid_seg[1] + (centroid[1] + (cluster_center[1] + pred_trans_mat_np[1]) * s_factor) * s_factor_seg)
@@ -343,7 +346,6 @@ def estimate():
             # pred_sRT[0, 3] = pred_trans_mat_np[0]
             # pred_sRT[1, 3] = pred_trans_mat_np[1]
             # pred_sRT[2, 3] = pred_trans_mat_np[2]
-            
             f_sRT[i] = pred_sRT
 
             inst_count += 1
@@ -353,6 +355,7 @@ def estimate():
         result = {}
         with open(img_path + '_label.pkl', 'rb') as f:
             gts = cPickle.load(f)
+            
         result['gt_class_ids'] = gts['class_ids']
         result['gt_bboxes'] = gts['bboxes'] # not use
         result['gt_RTs'] = gts['poses']
@@ -372,9 +375,12 @@ def estimate():
         with open(save_path, 'wb') as f:
             cPickle.dump(result, f)
         # TODO: DEBUG: draw result
-        _draw_detections(raw_rgb[:, :, ::-1], result_folder, 'd435', f'{img_count:04}', intrinsics, f_sRT, f_size, f_class_id,
-            [], [], [], [], [], [], draw_gt=False, draw_nocs=False)
-        # import ipdb; ipdb.set_trace()
+        # _draw_detections(raw_rgb[:, :, ::-1], result_folder, 'd435', f'{img_count:04}', intrinsics, f_sRT, f_size, f_class_id,
+        #     [], [], [], [], [], [], draw_gt=False, draw_nocs=False)
+        gt_img = raw_rgb[:, :, ::-1].copy()
+        draw_detections(raw_rgb[:, :, ::-1], result_folder, 'pred', f'{img_count:04}', intrinsics, f_sRT, f_size, f_class_id)  
+        draw_detections(gt_img, result_folder, 'gt', f'{img_count:04}', intrinsics, gts['poses'], gts['size'], gts['class_ids'])
+        import ipdb; ipdb.set_trace()
     # write statistics
     fw = open('{0}/eval_logs.txt'.format(result_folder), 'a')
     messages = []

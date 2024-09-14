@@ -82,12 +82,14 @@ class SapienPartial_ShapeNet(data.Dataset):
         self.subset = config.subset
         # self.npoints = config.N_POINTS
         self.obj_path = config.OBJ_PATH
+        
+        self.cate_num = config.CATE_NUM
         # self.data_list_file = os.path.join(self.data_root, f'{self.subset}.txt')
         # if self.subset == 'train':
         #     self.data_list_file = os.path.join(self.data_root, f'300view_nocs_train_list.txt')
         # elif self.subset == 'val' or self.subset == 'test':
         #     self.data_list_file = os.path.join(self.data_root, f'300view_nocs_test_list.txt')
-        self.data_list_file = os.path.join(self.data_root, f'300view_nocs_train_list.txt')
+        self.data_list_file = os.path.join(self.data_root, f'500view_nocs_train_list.txt')
 
         print(f'[DATASET] Open file {self.data_list_file}')
         with open(self.data_list_file, 'r') as f:

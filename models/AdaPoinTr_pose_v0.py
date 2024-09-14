@@ -894,20 +894,6 @@ class PCTransformer(nn.Module):
 class AdaPoinTr_Pose(nn.Module):
     def __init__(self, config, **kwargs):
         super().__init__()
-        
-        # NEW: 根据cate_num 指定输出维度
-        self.cate_num = config.cate_num
-        
-        # TODO: 设计如何对应mapping
-        self.mapping = {
-            '02876657': 0,
-            '02880940': 1,
-            '02942699': 2,
-            '02946921': 3,
-            '03642806': 4,
-            '03797390': 5
-        }
-        
         self.trans_dim = config.decoder_config.embed_dim
         self.num_query = config.num_query
         self.num_points = getattr(config, 'num_points', None)
@@ -961,32 +947,26 @@ class AdaPoinTr_Pose(nn.Module):
         self.rotat_head = nn.Sequential(
             nn.Linear(1024, 512),
             nn.GELU(),
-            nn.Linear(512, 256),
-            nn.GELU(),
-            nn.Linear(256, 6*self.cate_num),
+            nn.Linear(512, 6),
         )
         
         self.trans_head = nn.Sequential(
             nn.Linear(1024, 512),
             nn.GELU(),
-            nn.Linear(512, 256),
-            nn.GELU(),
-            nn.Linear(256, 3*self.cate_num),
+            nn.Linear(512, 3),
         )
         
         self.size_head = nn.Sequential(
             nn.Linear(1024, 512),
             nn.GELU(),
-            nn.Linear(512, 256),
-            nn.GELU(),
-            nn.Linear(256, 3*self.cate_num),
+            nn.Linear(512, 3),
         )
         #########################################################
 
     def build_loss_func(self):
         self.loss_func = ChamferDistanceL1()
 
-    def get_loss(self, ret, gt, gt_taxonomys, gt_rotat_mat, gt_trans_mat, gt_size_mat, epoch=1):
+    def get_loss(self, ret, gt, gt_rotat_mat, gt_trans_mat, gt_size_mat, epoch=1):
         
         pred_coarse, denoised_coarse, denoised_fine, pred_fine, pred_rotat_mat, pred_trans_mat, pred_size_mat = ret
         # import ipdb; ipdb.set_trace()
@@ -1017,16 +997,6 @@ class AdaPoinTr_Pose(nn.Module):
         # loss_rotat = nn.SmoothL1Loss()(torch.stack(minloss_pred_rotat_mat_list), gt_rotat_mat)
         
         ## gpt implementation
-        # TODO: 检查正确性
-        gt_cate_ids = torch.tensor([self.mapping[tax] for tax in gt_taxonomys]).cuda()
-        index = gt_cate_ids.squeeze() + torch.arange(gt.shape[0], dtype=torch.long).cuda() * self.cate_num
-        pred_trans_mat = pred_trans_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
-        pred_trans_mat = torch.index_select(pred_trans_mat, 0, index).contiguous()  # bs x 3
-        pred_size_mat = pred_size_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
-        pred_size_mat = torch.index_select(pred_size_mat, 0, index).contiguous()  # bs x 3
-        pred_rotat_mat = pred_rotat_mat.view(-1, 6).contiguous() # bs, 6*nc -> bs*nc, 6
-        pred_rotat_mat = torch.index_select(pred_rotat_mat, 0, index).contiguous()  # bs x 6
-        
         minloss_gt_rotat_mat_list = []
         loss_fn = nn.SmoothL1Loss()
         # print('检查原始输入')

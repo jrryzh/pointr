@@ -32,6 +32,8 @@ dataset : {
             
 model : {
     NAME: AdaPoinTr_Pose, 
+    # NEW
+    cate_num: 6,
     num_query: 512, 
     num_points: 8192,
     center_num: [256, 128],

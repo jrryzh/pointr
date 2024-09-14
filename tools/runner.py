@@ -133,7 +133,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
             ret = base_model(partial)
             
             if config.model.NAME == "AdaPoinTr_Pose": # base_model.__name__
-                sparse_loss, dense_loss, rotat_loss, trans_loss, size_loss = base_model.module.get_loss(ret, gt, gt_rotate_mat, gt_trans_mat, gt_size_mat, epoch)
+                sparse_loss, dense_loss, rotat_loss, trans_loss, size_loss = base_model.module.get_loss(ret, gt, taxonomy_ids, gt_rotate_mat, gt_trans_mat, gt_size_mat, epoch)
                 
                 _loss = sparse_loss + dense_loss + rotat_loss + trans_loss + size_loss
                 
@@ -228,6 +228,17 @@ def run_net(args, config, train_writer=None, val_writer=None):
         val_writer.close()
 
 def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val_writer, args, config, logger = None):
+    # TODO: 更好的添加mapping
+    mapping = {
+        '02876657': 0,
+        '02880940': 1,
+        '02942699': 2,
+        '02946921': 3,
+        '03642806': 4,
+        '03797390': 5
+        }
+    cate_num = len(mapping)
+    
     print_log(f"[VALIDATION] Start validating epoch {epoch}", logger = logger)
     base_model.eval()  # set model to eval mode
 
@@ -275,6 +286,15 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
             dense_loss_l2 =  ChamferDisL2(dense_points, gt)
             
             ############### pose matrix loss ################
+            gt_cate_ids = torch.tensor([mapping[tax] for tax in taxonomy_ids]).cuda()
+            index = gt_cate_ids.squeeze() + torch.arange(gt.shape[0], dtype=torch.long).cuda() * cate_num
+            pred_trans_mat = pred_trans_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
+            pred_trans_mat = torch.index_select(pred_trans_mat, 0, index).contiguous()  # bs x 3
+            pred_size_mat = pred_size_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
+            pred_size_mat = torch.index_select(pred_size_mat, 0, index).contiguous()  # bs x 3
+            pred_rotat_mat = pred_rotat_mat.view(-1, 6).contiguous() # bs, 6*nc -> bs*nc, 6
+            pred_rotat_mat = torch.index_select(pred_rotat_mat, 0, index).contiguous()  # bs x 6
+            
             ## gpt implementation
             loss_fn = nn.SmoothL1Loss()
             # print('pred_rotat_mat[0].shape,', pred_rotat_mat[0].shape)
