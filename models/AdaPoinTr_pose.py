@@ -960,24 +960,30 @@ class AdaPoinTr_Pose(nn.Module):
         ############# 添加分支预测 rotate trans size ############
         self.rotat_head = nn.Sequential(
             nn.Linear(1024, 512),
+            nn.BatchNorm1d(512),
             nn.GELU(),
             nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
             nn.GELU(),
             nn.Linear(256, 6*self.cate_num),
         )
         
         self.trans_head = nn.Sequential(
             nn.Linear(1024, 512),
+            nn.BatchNorm1d(512),
             nn.GELU(),
             nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
             nn.GELU(),
             nn.Linear(256, 3*self.cate_num),
         )
         
         self.size_head = nn.Sequential(
             nn.Linear(1024, 512),
+            nn.BatchNorm1d(512),
             nn.GELU(),
             nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
             nn.GELU(),
             nn.Linear(256, 3*self.cate_num),
         )

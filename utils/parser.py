@@ -14,7 +14,7 @@ def get_args():
         default='none',
         help='job launcher')     
     parser.add_argument('--local-rank', type=int, default=0) # 更新的pytorch版本用 local-rank 而非 local_rank
-    parser.add_argument('--num_workers', type=int, default=4)   
+    parser.add_argument('--num_workers', type=int, default=16)   
     # seed 
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument(

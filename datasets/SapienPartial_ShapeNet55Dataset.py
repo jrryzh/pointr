@@ -112,7 +112,7 @@ class SapienPartial_ShapeNet(data.Dataset):
                     })
 
         # DEBUG
-        # self.file_list = self.file_list[:300]
+        # self.file_list = self.file_list[:200]
         
         print(f'[DATASET] {len(self.file_list)} instances were loaded')
         
