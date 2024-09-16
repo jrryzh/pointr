@@ -85,11 +85,11 @@ class SapienPartial_ShapeNet(data.Dataset):
         
         self.cate_num = config.CATE_NUM
         # self.data_list_file = os.path.join(self.data_root, f'{self.subset}.txt')
-        # if self.subset == 'train':
-        #     self.data_list_file = os.path.join(self.data_root, f'300view_nocs_train_list.txt')
-        # elif self.subset == 'val' or self.subset == 'test':
-        #     self.data_list_file = os.path.join(self.data_root, f'300view_nocs_test_list.txt')
-        self.data_list_file = os.path.join(self.data_root, f'500view_nocs_train_list.txt')
+        if self.subset == 'train':
+            self.data_list_file = os.path.join(self.data_root, f'500view_nocs_train_list.txt')
+        elif self.subset == 'val' or self.subset == 'test':
+            self.data_list_file = os.path.join(self.data_root, f'500view_nocs_test_list.txt')
+        # self.data_list_file = os.path.join(self.data_root, f'500view_nocs_train_list.txt')
 
         print(f'[DATASET] Open file {self.data_list_file}')
         with open(self.data_list_file, 'r') as f:
@@ -100,16 +100,28 @@ class SapienPartial_ShapeNet(data.Dataset):
             line = line.strip()
             taxonomy_id = categories[line.split('/')[-2]]
             model_id = line.split('/')[-1]
-            for idx in range(500):
-                self.file_list.append({
-                        'taxonomy_id': taxonomy_id,
-                        'model_id': model_id,
-                        # 'obj_path': os.path.join(obj_path, taxonomy_id, model_id, 'models', 'model_normalized.obj'),
-                        'obj_path': os.path.join(self.obj_path, f'{taxonomy_id}-{model_id}.npy'),
-                        'pose_path': os.path.join(line, f'{idx:04}_pose.txt'),
-                        'pcd_path': os.path.join(line, f'{idx:04}_pcd.obj'),
-                        'rgb_path': os.path.join(line, f'{idx:04}_rgb.png')
-                    })
+            if self.subset == 'train':
+                for idx in range(500):
+                    self.file_list.append({
+                            'taxonomy_id': taxonomy_id,
+                            'model_id': model_id,
+                            # 'obj_path': os.path.join(obj_path, taxonomy_id, model_id, 'models', 'model_normalized.obj'),
+                            'obj_path': os.path.join(self.obj_path, f'{taxonomy_id}-{model_id}.npy'),
+                            'pose_path': os.path.join(line, f'{idx:04}_pose.txt'),
+                            'pcd_path': os.path.join(line, f'{idx:04}_pcd.obj'),
+                            'rgb_path': os.path.join(line, f'{idx:04}_rgb.png')
+                        })
+            else:
+                for idx in range(0, 500, 33):
+                    self.file_list.append({
+                            'taxonomy_id': taxonomy_id,
+                            'model_id': model_id,
+                            # 'obj_path': os.path.join(obj_path, taxonomy_id, model_id, 'models', 'model_normalized.obj'),
+                            'obj_path': os.path.join(self.obj_path, f'{taxonomy_id}-{model_id}.npy'),
+                            'pose_path': os.path.join(line, f'{idx:04}_pose.txt'),
+                            'pcd_path': os.path.join(line, f'{idx:04}_pcd.obj'),
+                            'rgb_path': os.path.join(line, f'{idx:04}_rgb.png')
+                        })
 
         # DEBUG
         # self.file_list = self.file_list[:200]
