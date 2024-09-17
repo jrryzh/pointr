@@ -435,6 +435,16 @@ def test_net(args, config):
     test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, logger=logger)
 
 def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, logger = None):
+    # TODO: 更好的添加mapping
+    mapping = {
+        '02876657': 0,
+        '02880940': 1,
+        '02942699': 2,
+        '02946921': 3,
+        '03642806': 4,
+        '03797390': 5
+        }
+    cate_num = len(mapping)
 
     base_model.eval()  # set model to eval mode
 
@@ -445,8 +455,8 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
 
     with torch.no_grad():
         for idx, (taxonomy_ids, model_ids, data) in enumerate(test_dataloader):
-            if idx % 2333 != 0:
-                continue
+            # if idx % 33 != 0:
+            #     continue
             # DEBUG
             # import ipdb; ipdb.set_trace()
             # print(f"Batch {idx} - data shape: {[d.shape for d in data]}") 
@@ -541,6 +551,17 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 dense_loss_l2 =  ChamferDisL2(dense_points, gt)
 
                 ############### pose matrix loss ################
+                # import ipdb; ipdb.set_trace()
+                gt_cate_ids = torch.tensor([mapping[tax] for tax in taxonomy_ids]).cuda()
+                index = gt_cate_ids.squeeze() + torch.arange(gt.shape[0], dtype=torch.long).cuda() * cate_num
+                pred_trans_mat = pred_trans_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
+                pred_trans_mat = torch.index_select(pred_trans_mat, 0, index).contiguous()  # bs x 3
+                pred_size_mat = pred_size_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
+                pred_size_mat = torch.index_select(pred_size_mat, 0, index).contiguous()  # bs x 3
+                pred_rotat_mat = pred_rotat_mat.view(-1, 6).contiguous() # bs, 6*nc -> bs*nc, 6
+                pred_rotat_mat = torch.index_select(pred_rotat_mat, 0, index).contiguous()  # bs x 6
+
+                
                 loss_fn = nn.SmoothL1Loss()
                 # print('pred_rotat_mat[0].shape,', pred_rotat_mat[0].shape)
                 # print('gt_rotate_mat[0].shape,', gt_rotate_mat[0].shape)
@@ -573,7 +594,7 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
 
             ################## NOTE: DEBUG SAVE PC ####################
             # if (idx+1) % 200 == 0:
-            if False:
+            if True:
                 print_log('Test[%d/%d] Taxonomy = %s Sample = %s Losses = %s Metrics = %s' %
                             (idx + 1, n_samples, taxonomy_id, model_id, ['%.4f' % l for l in test_losses.val()], 
                             ['%.4f' % m for m in _metrics]), logger=logger)
@@ -597,7 +618,7 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 centroid_np = centroid.cpu().detach().numpy().squeeze()
                 scale_np = scale.cpu().detach().numpy().squeeze()
                 # sample from 10518
-                intrinsics = np.loadtxt('/home/fudan248/zhangjinyu/code_repo/PoinTr/data/SapienRendered/sapien_output/ashcan/1c3cf618a6790f1021c6005997c63924/intrinsic.txt')
+                intrinsics = np.loadtxt('./data/SapienRendered/bottle/1cf98e5b6fff5471c8724d5673a063a6/intrinsic.txt')
                 img = cv2.imread(rgb_path)
                 pred_sRT = np.identity(4, dtype=float)
                 pred_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(pred_rotat_mat_np)
