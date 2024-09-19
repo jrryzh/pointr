@@ -101,9 +101,9 @@ class SapienPartial_ShapeNet(data.Dataset):
             line = line.strip()
             taxonomy_id = categories[line.split('/')[-2]]
             
-            # DEBUG:
-            if taxonomy_id not in ["03797390", "02946921", '02876657']:
-                continue
+            # # DEBUG:
+            # if taxonomy_id not in ["03797390", "02946921", '02876657']:
+            #     continue
             
             model_id = line.split('/')[-1]
             if self.subset == 'train':
@@ -117,7 +117,20 @@ class SapienPartial_ShapeNet(data.Dataset):
                             'pcd_path': os.path.join(line, f'{idx:04}_pcd.obj'),
                             'rgb_path': os.path.join(line, f'{idx:04}_rgb.png')
                         })
+            elif self.subset == 'val':
+                for idx in range(0, 500, 13):
+                    self.file_list.append({
+                            'taxonomy_id': taxonomy_id,
+                            'model_id': model_id,
+                            # 'obj_path': os.path.join(obj_path, taxonomy_id, model_id, 'models', 'model_normalized.obj'),
+                            'obj_path': os.path.join(self.obj_path, f'{taxonomy_id}-{model_id}.npy'),
+                            'pose_path': os.path.join(line, f'{idx:04}_pose.txt'),
+                            'pcd_path': os.path.join(line, f'{idx:04}_pcd.obj'),
+                            'rgb_path': os.path.join(line, f'{idx:04}_rgb.png')
+                        })
             else:
+                if taxonomy_id != '02942699':
+                    continue
                 for idx in range(0, 500, 33):
                     self.file_list.append({
                             'taxonomy_id': taxonomy_id,
