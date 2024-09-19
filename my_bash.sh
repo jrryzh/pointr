@@ -13,7 +13,7 @@ bash ./scripts/test.sh 3 --ckpts ./ckpts/pointr_training_from_scratch_c55_best.p
 bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose.yaml --exp_name nocs_train --resume
 bash ./scripts/test.sh 0 --ckpts experiments/AdaPoinTr_Pose/SapienPartial_ShapeNet55_models/nocs_train_w_bn/ckpt-best.pth --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose.yaml --exp_name nocs_train_w_bn
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 bash ./scripts/dist_train.sh 8 13232 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose.yaml --exp_name nocs_train
-python evaluate_sarnet.py --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose.yaml --ckpts ckpts/ckpt-best.pth
+python evaluate_sarnet.py --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose.yaml --ckpts  experiments/AdaPoinTr_Pose/SapienPartial_ShapeNet55_models/nocs_train_w_bn/ckpt-best.pth 
 
 # add_pose & fps cut
 bash ./scripts/train.sh 0 --config ./cfgs/PartialSpace_ShapeNet55_models/AdaPoinTr_Pose.yaml --exp_name test_rotate
@@ -23,5 +23,4 @@ bash ./scripts/test.sh 0 --ckpts ./experiments/AdaPoinTr_Pose/PartialSpace_Shape
 # partial pc space
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 bash ./scripts/dist_train.sh 8 13232 --config ./cfgs/PartialSpace_ShapeNet55_models/AdaPoinTr.yaml --exp_name test_dataset
 bash ./scripts/test.sh 0 --ckpts ./experiments/AdaPoinTr/PartialSpace_ShapeNet55_models/view100_distance5/ckpt-last.pth --config ./cfgs/PartialSpace_ShapeNet55_models/AdaPoinTr.yaml --mode median --exp_name test
-
 # set up conv

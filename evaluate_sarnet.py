@@ -29,7 +29,7 @@ from utils import parser as model_parser
 
 
 # model(depreciated: sarnet)
-from utils.utils_pose import load_obj, load_depth, save_to_obj_pts, pc_normalize, get_bbox, compute_mAP, plot_mAP, draw_detections, _draw_detections
+from utils.utils_pose import load_obj, load_depth, save_to_obj_pts, pc_normalize, get_bbox, compute_mAP, plot_mAP, draw_detections, _draw_detections, get_3d_bbox, transform_coordinates_3d, calculate_2d_projections
 
 # seg 3D
 from utils.config_seg3d import args as seg3d_args
@@ -66,7 +66,7 @@ def depth2pcd(depth, choose, crop_reigon=None):
     pt2 = depth_masked / norm_scale
     pt0 = (xmap_masked - cam_cx) * pt2 / cam_fx
     pt1 = (ymap_masked - cam_cy) * pt2 / cam_fy
-    points = np.concatenate((pt0, -pt1, -pt2), axis=1)#(N,3)
+    points = np.concatenate((pt0, pt1, pt2), axis=1)#(N,3)
     return points
 
 def adjust_npts(choose, target_npts):
@@ -84,6 +84,18 @@ def adjust_npts(choose, target_npts):
 def estimate():
     # os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpu
     categories = ['BG', 'bottle', 'bowl', 'camera', 'can', 'laptop', 'mug']
+    
+    # TODO: 更好的添加mapping
+    mapping = {
+        '02876657': 0,
+        '02880940': 1,
+        '02942699': 2,
+        '02946921': 3,
+        '03642806': 4,
+        '03797390': 5
+        }
+    # ['bottle', 'bowl', 'camera', 'can', 'laptop', 'mug']
+    cate_num = len(mapping)
     
     # Load adapointr_pose
     # TODO: Load the model
@@ -110,7 +122,7 @@ def estimate():
                 for line in open(os.path.join(opt.data_folder, file_path))]
 
     # TODO: img_list 先取前10
-    img_list = img_list[:100]
+    img_list = img_list[:300]
     #########################
     
     inst_count = 0
@@ -169,7 +181,10 @@ def estimate():
                 f_size[i] = np.zeros((1,3))
                 print('{} less than 32'.format(len(choose)))
                 continue
-
+            
+            # 观察原始点的个数
+            # import ipdb; ipdb.set_trace()
+            # print("original choose: ", len(choose))
             choose = adjust_npts(choose, opt.backproj_npts)
             _backproj_pcd = depth2pcd(depth=raw_depth, choose=choose, crop_reigon=(rmin,rmax,cmin,cmax)) #(N,3)
             # cv2.imwrite('crop.png', raw_rgb[rmin:rmax, cmin:cmax])
@@ -217,50 +232,13 @@ def estimate():
             #     save_to_obj_pts(backproj_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_src_in.obj'.format(scene_id, image_id, categories[cate_id + 1])))
             #     save_to_obj_pts(obsv_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_seg.obj'.format(scene_id, image_id, categories[cate_id + 1])))
             #     print(f"保存输入 pc: {os.path.join(opt.output_pcd_folder, '{}_{}_{}_seg.obj'.format(scene_id, image_id, categories[cate_id + 1]))}")
-                
-            # '''
-            # ###############################
-            # # Step 2 SARNet inference
-            # ###############################
-            # '''
-            # obsv_pcd, centroid, s_factor = pc_normalize(obsv_pcd)  # (N,3)
-            # obsv_pcd_tensor = torch.from_numpy(obsv_pcd).unsqueeze(0).transpose(2, 1).contiguous() # (3,N)
-            # obsv_pcd_tensor = obsv_pcd_tensor.cuda().float()
-
-
-            # template_path = os.path.join(opt.temp_folder, '{}_fps_36_normalized.obj'.format(categories[cate_id + 1]))
-            # # template_path = os.path.join(ROOT_PATH, 'FPS_sample', '{}_fps_128_normalized.obj'.format(categories[cate_id + 1]))
-            # temp_pcd, _ = load_obj(template_path)
-            # temp_pcd, _, _ = pc_normalize(temp_pcd) #(N,3)
-            # temp_pcd_tensor = torch.from_numpy(temp_pcd).unsqueeze(0).transpose(2, 1).contiguous() #(B,3,N_k)
-            # temp_pcd_tensor = temp_pcd_tensor.cuda().float()
-
-            # # pred
-            # cate_id = np.array(cate_id)
-            # cate_id_tensor = torch.from_numpy(cate_id).cuda()
-            # with torch.no_grad():
-            #     preds = net_pose(obsv_pcd_tensor, temp_pcd_tensor, cate_id_tensor, mode='test')
-            # pred_SA, pred_SC, pred_OC, pred_OS, new_centroid = preds
-
-            # if opt.pcd_isSave:
-            #     create_folder(opt.output_pcd_folder)
-            #     save_to_obj_pts(obsv_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_in.obj'.format(scene_id, image_id, categories[cate_id + 1])))
-            #     save_to_obj_pts(pred_SA.transpose(), os.path.join(opt.output_pcd_folder, '{}_{}_{}_SA.obj'.format(scene_id, image_id, categories[cate_id + 1])))
-            #     save_to_obj_pts(pred_SC.transpose(), os.path.join(opt.output_pcd_folder, '{}_{}_{}_SC.obj'.format(scene_id, image_id, categories[cate_id + 1])))
             '''
             ###############################
             # Step 2 Adapointr_Pose inference
             ###############################
             '''
-            # TODO: change to adapointr inference  
-            # DEBUG
-            test2train_mat = np.array([
-                [1, 0, 0],
-                [0, -1, 0],
-                [0, 0, -1]
-            ])                      
-            _input_pcd, centroid, s_factor = pc_normalize(obsv_pcd)  # (N,3)
-            input_pcd = _input_pcd.dot(test2train_mat)
+            # TODO: change to adapointr inference             
+            input_pcd, centroid, s_factor = pc_normalize(obsv_pcd)  # (N,3)
             input_pcd_tensor = torch.from_numpy(input_pcd).unsqueeze(0).contiguous()
             input_pcd_tensor = input_pcd_tensor.cuda().float()
             
@@ -281,44 +259,30 @@ def estimate():
             coarse_points_np = coarse_points.cpu().detach().numpy().squeeze()
             dense_points_np = dense_points.cpu().detach().numpy().squeeze()
             if opt.pcd_isSave:
+                print('保存点云到', result_folder)
                 scene_id = path.split('/')[-2].split('_')[-1]
                 image_id = path.split('/')[-1]
-                create_folder(opt.output_pcd_folder)
-                save_to_obj_pts(input_pcd, os.path.join(opt.output_pcd_folder, '{}_{}_{}_final_input.obj'.format(scene_id, image_id, categories[cate_id + 1])))
-                save_to_obj_pts(coarse_points_np, os.path.join(opt.output_pcd_folder, '{}_{}_{}_coarse_complete.obj'.format(scene_id, image_id, categories[cate_id + 1])))
-                save_to_obj_pts(dense_points_np, os.path.join(opt.output_pcd_folder, '{}_{}_{}_dense_complete.obj'.format(scene_id, image_id, categories[cate_id + 1])))
-                print(f"保存输入 pc: {os.path.join(opt.output_pcd_folder, '{}_{}_{}_final_input.obj'.format(scene_id, image_id, categories[cate_id + 1]))}")
-                print(f"保存补全后coarse pc: {os.path.join(opt.output_pcd_folder, '{}_{}_{}_coarse_complete.obj'.format(scene_id, image_id, categories[cate_id + 1]))}")
-                print(f"保存补全后dense pc: {os.path.join(opt.output_pcd_folder, '{}_{}_{}_dense_complete.obj'.format(scene_id, image_id, categories[cate_id + 1]))}")
-            # import ipdb; ipdb.set_trace()
+                create_folder(result_folder)
+                # # 反转yz得到原始点云
+                save_to_obj_pts(_backproj_pcd, os.path.join(result_folder, '{}_{}_{}_original_cam.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+                # 其他保存
+                # save_to_obj_pts(obsv_pcd, os.path.join(result_folder, '{}_{}_{}_pre_input.obj'.format(scene_id, image_id, categories[cate_id + 1]))) # 观察下方向
+                # save_to_obj_pts(input_pcd, os.path.join(result_folder, '{}_{}_{}_final_input.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+                # save_to_obj_pts(coarse_points_np, os.path.join(result_folder, '{}_{}_{}_coarse_complete.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+                # save_to_obj_pts(dense_points_np, os.path.join(result_folder, '{}_{}_{}_dense_complete.obj'.format(scene_id, image_id, categories[cate_id + 1])))
             '''
             ###############################
             # Step 3 Post-processing 
             ###############################
-            '''
-            # _, _, _, pred_sRT = umeyama.estimateSimilarityTransform(temp_pcd, pred_SA.transpose(), False)  # (N,3)
-            # if pred_sRT is None:
-            #     pred_sRT = np.identity(4, dtype=float)
-
-            # pred_sRT[1, :3] = -pred_sRT[1, :3]
-            # pred_sRT[2, :3] = -pred_sRT[2, :3]
-
-            # '''recovered pose(RT) by Umeyama composes of size factor(s)'''
-            # s1 = np.cbrt(np.linalg.det(pred_sRT[:3, :3]))
-            # pred_sRT[:3, :3] = pred_sRT[:3, :3] / s1
-
-            # cluster_center = np.mean(pred_OC, axis=1)
-
-            # # pred_sRT[0, 3] =  (centroid_seg[0] + (centroid[0] + (cluster_center[0] + new_centroid[0]) * s_factor) * s_factor_seg)
-            # # pred_sRT[1, 3] = -(centroid_seg[1] + (centroid[1] + (cluster_center[1] + new_centroid[1]) * s_factor) * s_factor_seg)
-            # # pred_sRT[2, 3] = -(centroid_seg[2] + (centroid[2] + (cluster_center[2] + new_centroid[2]) * s_factor) * s_factor_seg)
-            # pred_sRT[0, 3] =  (centroid_seg[0] + (centroid[0] + (cluster_center[0] ) * s_factor) * s_factor_seg)
-            # pred_sRT[1, 3] = -(centroid_seg[1] + (centroid[1] + (cluster_center[1] ) * s_factor) * s_factor_seg)
-            # pred_sRT[2, 3] = -(centroid_seg[2] + (centroid[2] + (cluster_center[2] ) * s_factor) * s_factor_seg)
-
-
-            # f_size[i] = pred_OS * s_factor * s_factor_seg
-            # f_sRT[i] = pred_sRT
+            '''            
+            # 先按cateid 取出对应类别
+            index = torch.tensor(cate_id).cuda()
+            pred_trans_mat = pred_trans_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
+            pred_trans_mat = torch.index_select(pred_trans_mat, 0, index) # bs x 3
+            pred_size_mat = pred_size_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
+            pred_size_mat = torch.index_select(pred_size_mat, 0, index)  # bs x 3
+            pred_rotat_mat = pred_rotat_mat.view(-1, 6).contiguous() # bs, 6*nc -> bs*nc, 6
+            pred_rotat_mat = torch.index_select(pred_rotat_mat, 0, index)  # bs x 6
             
             # TODO: change to adapointr pose postprocessing
             pred_size_mat_np = pred_size_mat.cpu().detach().numpy().squeeze()
@@ -326,30 +290,42 @@ def estimate():
             pred_trans_mat_np = pred_trans_mat.cpu().detach().numpy().squeeze()
             
             # TODO: 先尝试反乘变换矩阵
-            train_to_test_mat = np.array([
-                [1, 0, 0],
-                [0, -1, 0],
-                [0, 0, -1]
-            ])
-            pred_trans_mat_np = pred_trans_mat_np @ train_to_test_mat
+            # train_to_test_mat = np.array([
+            #     [1, 0, 0],
+            #     [0, -1, 0],
+            #     [0, 0, -1]
+            # ])
+            # pred_trans_mat_np = pred_trans_mat_np @ train_to_test_mat
             # pred_size_mat_np = pred_size_mat_np @ train_to_test_mat
             # pred_rotat_mat_np = pred_rotat_mat_np @ train_to_test_mat
             
-            # f_size[i] = pred_size_mat_np * s_factor * s_factor_seg
             f_size[i] = pred_size_mat_np * s_factor * s_factor_seg
             pred_sRT = np.identity(4, dtype=float)
-            pred_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(pred_rotat_mat_np) @ train_to_test_mat 
-            cluster_center = np.mean(_input_pcd, axis=1) # obsv_pcd: 初始 _input_pcd: 正则化后 input_pcd: 旋转后
+            pred_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(pred_rotat_mat_np) 
+            # pred_sRT[1, :3] = pred_sRT[1, :3]
+            # pred_sRT[2, :3] = -pred_sRT[2, :3]
+            cluster_center = np.mean(input_pcd, axis=1) # obsv_pcd: 初始 _input_pcd: 正则化后 input_pcd: 旋转后
             pred_sRT[0, 3] = (centroid_seg[0] + (centroid[0] + (cluster_center[0] + pred_trans_mat_np[0]) * s_factor) * s_factor_seg)
-            pred_sRT[1, 3] = -(centroid_seg[1] + (centroid[1] + (cluster_center[1] + pred_trans_mat_np[1]) * s_factor) * s_factor_seg)
-            pred_sRT[2, 3] = -(centroid_seg[2] + (centroid[2] + (cluster_center[2] + pred_trans_mat_np[2]) * s_factor) * s_factor_seg)
+            pred_sRT[1, 3] = (centroid_seg[1] + (centroid[1] + (cluster_center[1] + pred_trans_mat_np[1]) * s_factor) * s_factor_seg)
+            pred_sRT[2, 3] = (centroid_seg[2] + (centroid[2] + (cluster_center[2] + pred_trans_mat_np[2]) * s_factor) * s_factor_seg)
             # pred_sRT[0, 3] = pred_trans_mat_np[0]
             # pred_sRT[1, 3] = pred_trans_mat_np[1]
             # pred_sRT[2, 3] = pred_trans_mat_np[2]
             f_sRT[i] = pred_sRT
+            
+            if opt.pcd_isSave:
+                print('保存点云到', result_folder)
+                scene_id = path.split('/')[-2].split('_')[-1]
+                image_id = path.split('/')[-1]
+                bbox_3d = get_3d_bbox(f_size[i], 0)
+                transformed_bbox_3d = transform_coordinates_3d(bbox_3d, pred_sRT)
+                save_to_obj_pts(transformed_bbox_3d.transpose(), os.path.join(result_folder, '{}_{}_{}_predicted_bbox.obj'.format(scene_id, image_id, categories[cate_id + 1])))
 
             inst_count += 1
         img_count += 1
+        
+        if img_count == 5:
+            import ipdb; ipdb.set_trace()
 
         # save results
         result = {}
@@ -377,10 +353,10 @@ def estimate():
         # TODO: DEBUG: draw result
         # _draw_detections(raw_rgb[:, :, ::-1], result_folder, 'd435', f'{img_count:04}', intrinsics, f_sRT, f_size, f_class_id,
         #     [], [], [], [], [], [], draw_gt=False, draw_nocs=False)
-        gt_img = raw_rgb[:, :, ::-1].copy()
-        draw_detections(raw_rgb[:, :, ::-1], result_folder, 'pred', f'{img_count:04}', intrinsics, f_sRT, f_size, f_class_id)  
-        draw_detections(gt_img, result_folder, 'gt', f'{img_count:04}', intrinsics, gts['poses'], gts['size'], gts['class_ids'])
-        import ipdb; ipdb.set_trace()
+        if opt.img_isSave:
+            gt_img = raw_rgb[:, :, ::-1].copy()
+            draw_detections(raw_rgb[:, :, ::-1], result_folder, 'pred', f'{img_count-1:04}', intrinsics, f_sRT, f_size, f_class_id)  
+            # draw_detections(gt_img, result_folder, 'gt', f'{img_count-1:04}', intrinsics, gts['poses'], gts['size'], gts['class_ids'])
     # write statistics
     fw = open('{0}/eval_logs.txt'.format(result_folder), 'a')
     messages = []
@@ -470,16 +446,17 @@ if __name__ == "__main__":
     parser.add_argument('--config',help='config file path')
     parser.add_argument('--ckpts', help='ckpt')
     ##### 等待优化掉 #######
-    parser.add_argument('--data_type', type=str, default='cam_val', help='cam_val, real_test')
+    parser.add_argument('--data_type', type=str, default='real_test', help='cam_val, real_test')
     parser.add_argument('--data_folder', type=str, default='./data/NOCS', help='data directory')
     parser.add_argument('--results_folder', type=str, default='./results/NOCS', help='root path for saving results')
     # parser.add_argument('--temp_folder', type=str, default='../data/NOCS/template_FPS', help='root path for saving template')
-    parser.add_argument('--backproj_npts', type=int, default=2048, help='number of foreground points')
+    parser.add_argument('--backproj_npts', type=int, default=2048, help='number of foreground points') # 2048
     parser.add_argument('--gpu', type=str, default='0', help='GPU to use')
     parser.add_argument('--detect_type', type=str, default='mask', help='[mask, bbx]]')
     parser.add_argument('--detect_network', type=str, default='mrcnn', help='[mrcnn, yolo, ...]]')
     parser.add_argument('--GCN3D_isNeed', type=str2bool, default=True, help='add 3d point segmentation 3DGCN')
     parser.add_argument('--pcd_isSave', type=str2bool, default=True, help='save immediate point cloud')
+    parser.add_argument('--img_isSave', type=str2bool, default=True, help='save detection image')
     parser.add_argument('--output_pcd_folder', type=str, default='./tmp/test0913/', help='path of immediate point cloud')
     parser.add_argument('--GCN3D_model_path', type=str, default='./ckpts/20210530_5.pth', help='model path of 3DGCN')
     
@@ -521,5 +498,5 @@ if __name__ == "__main__":
     
     print('Estimating ...')
     estimate()
-    # print('Evaluating ...')
-    # evaluate()
+    print('Evaluating ...')
+    evaluate()

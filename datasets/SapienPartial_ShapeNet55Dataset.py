@@ -11,6 +11,7 @@ from utils import misc
 from utils import convert_rotation
 from utils import utils_pose
 from torch.utils.data import DataLoader
+from utils.utils_pose import save_to_obj_pts
 
 _categories = {
     '02691156': 'airplane', 
@@ -99,6 +100,11 @@ class SapienPartial_ShapeNet(data.Dataset):
         for line in lines:
             line = line.strip()
             taxonomy_id = categories[line.split('/')[-2]]
+            
+            # DEBUG:
+            if taxonomy_id not in ["03797390", "02946921", '02876657']:
+                continue
+            
             model_id = line.split('/')[-1]
             if self.subset == 'train':
                 for idx in range(500):
@@ -159,13 +165,25 @@ class SapienPartial_ShapeNet(data.Dataset):
         # in camera coordinate
         partial_pc, _ = utils_pose.load_obj(sample['pcd_path'])
         complete_pc = utils_pose.apply_transformation(_complete_pc, _pose)
-        # TODO：对partial_pc做一步采样，先设置为2048
+        # TODO：对partial_pc做一步采样，先设置为1024
         np.random.seed(idx)
         sample_idx = np.random.choice(partial_pc.shape[0], size=1024, replace=True)
         partial_pc = partial_pc[sample_idx]
         # in partial coordinate
         data['partial'], centroid, scale = misc.pc_normalize(partial_pc)
         data['gt'] = (complete_pc - centroid) / scale
+        
+        
+        DEBUG = True
+        # if DEBUG:
+        #     save_to_obj_pts(data['partial'], f'./tmp/test0918/{idx}_partial.obj')
+        #     save_to_obj_pts(data['gt'], f'./tmp/test0918/{idx}_gt.obj')
+            
+        # if DEBUG:
+        #     taxonomy_id =sample['taxonomy_id']
+        #     save_to_obj_pts(_complete_pc, f'./tmp/test0918/{_categories[taxonomy_id]}_{idx}_pointr.obj')
+        #     save_to_obj_pts(complete_pc, f'./tmp/test0918/{_categories[taxonomy_id]}_{idx}_convert_pointr.obj')
+        #     save_to_obj_pts(partial_pc, f'./tmp/test0918/{_categories[taxonomy_id]}_{idx}_partial.obj')
         
         ##### R T s #####
         # rotate_mat = convert_rotation.single_rotation_matrix_to_ortho6d(_pose[:3, :3]).flatten()
