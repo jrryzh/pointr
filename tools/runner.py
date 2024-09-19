@@ -401,6 +401,8 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
         val_writer.add_scalar('Loss/Epoch/Sparse', test_losses.avg(0), epoch)
         val_writer.add_scalar('Loss/Epoch/Dense', test_losses.avg(2), epoch)
         val_writer.add_scalar('Loss/Epoch/Rotate', test_losses.avg(4), epoch)
+        val_writer.add_scalar('Loss/Epoch/Trans', test_losses.avg(5), epoch)
+        val_writer.add_scalar('Loss/Epoch/Size', test_losses.avg(6), epoch)
         for i, metric in enumerate(test_metrics.items):
             val_writer.add_scalar('Metric/%s' % metric, test_metrics.avg(i), epoch)
 

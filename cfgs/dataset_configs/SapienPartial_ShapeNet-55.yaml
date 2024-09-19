@@ -2,7 +2,7 @@ NAME: SapienPartial_ShapeNet
 # DATA_PATH: /home/fudan248/zhangjinyu/code_repo/PoinTr/data/SapienRendered
 # OBJ_PATH: /home/fudan248/zhangjinyu/code_repo/PoinTr/data/ShapeNet55-34/shapenet_pc/
 DATA_PATH: ./data/SapienRendered
-OBJ_PATH: ./data/ShapeNet55-34/shapenet_pc
+OBJ_PATH: ./data/SapienRendered_objs
 CATE_NUM: 6
 
 N_POINTS: 8192

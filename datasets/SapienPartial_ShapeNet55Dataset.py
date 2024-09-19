@@ -154,13 +154,13 @@ class SapienPartial_ShapeNet(data.Dataset):
         # _complete_pc, _ = utils_pose.load_obj(sample['obj_path'])
         
         # 将pointr提供的npy旋转为我们flip后的结果
-        convert_matrix = np.array([
-            [1, 0,  0],
-            [0, 0,  1],
-            [0, -1, 0]
-        ])
+        # convert_matrix = np.array([
+        #     [1, 0,  0],
+        #     [0, 0,  1],
+        #     [0, -1, 0]
+        # ])
         _complete_pc = np.load(sample['obj_path'])
-        _complete_pc = _complete_pc @ convert_matrix
+        # _complete_pc = _complete_pc @ convert_matrix
         _pose = np.loadtxt(sample['pose_path'])
         # in camera coordinate
         partial_pc, _ = utils_pose.load_obj(sample['pcd_path'])
@@ -179,11 +179,11 @@ class SapienPartial_ShapeNet(data.Dataset):
         #     save_to_obj_pts(data['partial'], f'./tmp/test0918/{idx}_partial.obj')
         #     save_to_obj_pts(data['gt'], f'./tmp/test0918/{idx}_gt.obj')
             
-        # if DEBUG:
-        #     taxonomy_id =sample['taxonomy_id']
+        if DEBUG:
+            taxonomy_id =sample['taxonomy_id']
         #     save_to_obj_pts(_complete_pc, f'./tmp/test0918/{_categories[taxonomy_id]}_{idx}_pointr.obj')
-        #     save_to_obj_pts(complete_pc, f'./tmp/test0918/{_categories[taxonomy_id]}_{idx}_convert_pointr.obj')
-        #     save_to_obj_pts(partial_pc, f'./tmp/test0918/{_categories[taxonomy_id]}_{idx}_partial.obj')
+            save_to_obj_pts(complete_pc, f'./tmp/test0919/{_categories[taxonomy_id]}_{idx}_convert_pointr.obj')
+            save_to_obj_pts(partial_pc, f'./tmp/test0919/{_categories[taxonomy_id]}_{idx}_partial.obj')
         
         ##### R T s #####
         # rotate_mat = convert_rotation.single_rotation_matrix_to_ortho6d(_pose[:3, :3]).flatten()

@@ -1,4 +1,5 @@
 import os
+import random
 
 sapien_dir = "/data/nas/zjy/code_repo/pointr/data/SapienRendered"
 
@@ -17,11 +18,25 @@ for category in category_list:
             fail_list.append(os.path.join(sapien_dir, category, instance))
             fail += 1
     print(f"{category} fail: {fail}/{all}")
+
+# 从train 按4:1 取obj
+train_list = []
+test_list = []
+for idx, path in enumerate(result_list):
+    if idx % 10 ==0:
+        test_list.append(path)
+    else:
+        train_list.append(path)
     
 # 保存result_list到文件
-result_list_path = os.path.join("/data/nas/zjy/code_repo/pointr/data/SapienRendered", "500view_nocs_train_list.txt")
-with open(result_list_path, 'w') as f:
-    for item in result_list:
+train_list_path = os.path.join("/data/nas/zjy/code_repo/pointr/data/SapienRendered", "500view_nocs_train_list.txt")
+with open(train_list_path, 'w') as f:
+    for item in train_list:
+        f.write(f"{item}\n")
+
+test_list_path = os.path.join("/data/nas/zjy/code_repo/pointr/data/SapienRendered", "500view_nocs_test_list.txt")
+with open(test_list_path, 'w') as f:
+    for item in test_list:
         f.write(f"{item}\n")
 
 # 保存fail_list到文件
