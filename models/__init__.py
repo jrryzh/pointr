@@ -7,3 +7,4 @@ import models.FoldingNet
 import models.SnowFlakeNet
 import models.AdaPoinTr
 import models.AdaPoinTr_pose
+import models.AdaPoinTr_pose_camloss

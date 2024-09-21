@@ -11,7 +11,7 @@ from utils import misc
 from utils import convert_rotation
 from utils import utils_pose
 from torch.utils.data import DataLoader
-from utils.utils_pose import save_to_obj_pts
+from utils.utils_pose import save_to_obj_pts, add_gaussian_noise
 
 _categories = {
     '02691156': 'airplane', 
@@ -84,6 +84,8 @@ class SapienPartial_ShapeNet(data.Dataset):
         # self.npoints = config.N_POINTS
         self.obj_path = config.OBJ_PATH
         
+        self.add_gaussian_noise = config.GAUSSIAN_NOISE
+        
         self.cate_num = config.CATE_NUM
         # self.data_list_file = os.path.join(self.data_root, f'{self.subset}.txt')
         if self.subset == 'train':
@@ -129,8 +131,8 @@ class SapienPartial_ShapeNet(data.Dataset):
                             'rgb_path': os.path.join(line, f'{idx:04}_rgb.png')
                         })
             else:
-                if taxonomy_id != '02942699':
-                    continue
+                # if taxonomy_id != '02942699':
+                #     continue
                 for idx in range(0, 500, 33):
                     self.file_list.append({
                             'taxonomy_id': taxonomy_id,
@@ -177,6 +179,10 @@ class SapienPartial_ShapeNet(data.Dataset):
         _pose = np.loadtxt(sample['pose_path'])
         # in camera coordinate
         partial_pc, _ = utils_pose.load_obj(sample['pcd_path'])
+        
+        if self.add_gaussian_noise:
+            partial_pc = add_gaussian_noise(partial_pc, 0.0, 0.02)
+        
         complete_pc = utils_pose.apply_transformation(_complete_pc, _pose)
         # TODO：对partial_pc做一步采样，先设置为1024
         np.random.seed(idx)
@@ -186,7 +192,6 @@ class SapienPartial_ShapeNet(data.Dataset):
         data['partial'], centroid, scale = misc.pc_normalize(partial_pc)
         data['gt'] = (complete_pc - centroid) / scale
         
-        
         DEBUG = True
         # if DEBUG:
         #     save_to_obj_pts(data['partial'], f'./tmp/test0918/{idx}_partial.obj')
@@ -194,9 +199,9 @@ class SapienPartial_ShapeNet(data.Dataset):
             
         if DEBUG:
             taxonomy_id =sample['taxonomy_id']
-        #     save_to_obj_pts(_complete_pc, f'./tmp/test0918/{_categories[taxonomy_id]}_{idx}_pointr.obj')
-            save_to_obj_pts(complete_pc, f'./tmp/test0919/{_categories[taxonomy_id]}_{idx}_convert_pointr.obj')
-            save_to_obj_pts(partial_pc, f'./tmp/test0919/{_categories[taxonomy_id]}_{idx}_partial.obj')
+        # #     save_to_obj_pts(_complete_pc, f'./tmp/test0918/{_categories[taxonomy_id]}_{idx}_pointr.obj')
+        #     save_to_obj_pts(complete_pc, f'./tmp/test0919/{_categories[taxonomy_id]}_{idx}_convert_pointr.obj')
+            save_to_obj_pts(partial_pc, f'./tmp/test0921/{_categories[taxonomy_id]}_{idx}_partial.obj')
         
         ##### R T s #####
         # rotate_mat = convert_rotation.single_rotation_matrix_to_ortho6d(_pose[:3, :3]).flatten()
@@ -215,11 +220,16 @@ class SapienPartial_ShapeNet(data.Dataset):
         else:
             rotate_mat = np.expand_dims(convert_rotation.single_rotation_matrix_to_ortho6d(_pose[:3, :3]).flatten(), axis=0).repeat(12, axis=0)
         ##################
+        if DEBUG:
+            for i, rotate in enumerate(rotate_mat):
+                test_pose = _pose
+                test_pose[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(rotate)
+                save_to_obj_pts(utils_pose.apply_transformation(_complete_pc, test_pose), f'./tmp/test0920/{_categories[sample["taxonomy_id"]]}_{idx}_rotate_{i}.obj')
         
         if self.subset == 'train' or self.subset == 'val':
-            return sample['taxonomy_id'], sample['model_id'], (data['partial'].astype(np.float32), data['gt'].astype(np.float32), rotate_mat.astype(np.float32), trans_mat.astype(np.float32), size_mat.astype(np.float32))
+            return sample['taxonomy_id'], sample['model_id'], (data['partial'].astype(np.float32), data['gt'].astype(np.float32), rotate_mat.astype(np.float32), trans_mat.astype(np.float32), size_mat.astype(np.float32), centroid.astype(np.float32), scale.astype(np.float32), partial_pc.astype(np.float32), complete_pc.astype(np.float32), _complete_pc.astype(np.float32), sample['rgb_path'])
         else:
-            return sample['taxonomy_id'], sample['model_id'], (data['partial'].astype(np.float32), data['gt'].astype(np.float32), rotate_mat.astype(np.float32), trans_mat.astype(np.float32), size_mat.astype(np.float32), centroid.astype(np.float32), scale.astype(np.float32), sample['rgb_path'])
+            return sample['taxonomy_id'], sample['model_id'], (data['partial'].astype(np.float32), data['gt'].astype(np.float32), rotate_mat.astype(np.float32), trans_mat.astype(np.float32), size_mat.astype(np.float32), centroid.astype(np.float32), scale.astype(np.float32), partial_pc.astype(np.float32), complete_pc.astype(np.float32), _complete_pc.astype(np.float32), sample['rgb_path'])
 
     def __len__(self):
         return len(self.file_list)

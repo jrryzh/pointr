@@ -5,7 +5,14 @@ import numpy as np
 
 
 def single_rotation_matrix_to_ortho6d(R):
-    return np.concatenate((R[:,0], R[:,1]))
+    # 如果R 是 ndarray
+    if isinstance(R, np.ndarray):
+        return np.concatenate((R[:,0], R[:,1]))
+    # 如果R 是 tensor
+    elif isinstance(R, torch.Tensor):
+        return torch.cat((R[:,0], R[:,1]))
+    else:
+        raise TypeError("Input type is not supported")
 
 
 # 定义归一化函数
@@ -16,13 +23,85 @@ def normalize(v):
     return v / norm
 
 
+# def single_rotation_matrix_from_ortho6d(ortho6d):
+#     # 如果ortho6d 是 ndarray
+#     if isinstance(ortho6d, np.ndarray):
+    
+#         a1 = ortho6d[:3]
+#         a2 = ortho6d[3:6]
+        
+#         a3 = np.cross(a1, a2)
+        
+#         return np.stack((a1, a2, a3), axis=1)
+#     # 如果ortho6d 是 tensor
+#     elif isinstance(ortho6d, torch.Tensor):
+#         a1 = ortho6d[:,:3]
+#         a2 = ortho6d[:,3:6]
+        
+#         a3 = torch.cross(a1, a2, dim=1)
+        
+#         return torch.cat((a1, a2, a3), dim=1)
+#     else:
+#         raise TypeError("Input type is not supported")
 def single_rotation_matrix_from_ortho6d(ortho6d):
-    a1 = ortho6d[:3]
-    a2 = ortho6d[3:6]
-    
-    a3 = np.cross(a1, a2)
-    
-    return np.stack((a1, a2, a3), axis=1)
+    if isinstance(ortho6d, np.ndarray):
+        a1 = ortho6d[:3]
+        a2 = ortho6d[3:6]
+
+        # Normalize a1
+        a1_norm = np.linalg.norm(a1)
+        if a1_norm == 0:
+            raise ValueError("Zero vector encountered in a1 normalization.")
+        a1 = a1 / a1_norm
+
+        # Orthogonalize a2 with respect to a1
+        dot_product = np.dot(a1, a2)
+        a2 = a2 - dot_product * a1
+
+        # Normalize a2
+        a2_norm = np.linalg.norm(a2)
+        if a2_norm == 0:
+            raise ValueError("Zero vector encountered in a2 normalization.")
+        a2 = a2 / a2_norm
+
+        # Compute a3 as cross product of a1 and a2
+        a3 = np.cross(a1, a2)
+
+        # Stack into rotation matrix
+        rotation_matrix = np.stack((a1, a2, a3), axis=1)
+
+        return rotation_matrix
+
+    elif isinstance(ortho6d, torch.Tensor):
+        a1 = ortho6d[:3]
+        a2 = ortho6d[3:6]
+
+        # Normalize a1
+        a1_norm = torch.norm(a1)
+        if a1_norm == 0:
+            raise ValueError("Zero vector encountered in a1 normalization.")
+        a1 = a1 / a1_norm
+
+        # Orthogonalize a2 with respect to a1
+        dot_product = torch.dot(a1, a2)
+        a2 = a2 - dot_product * a1
+
+        # Normalize a2
+        a2_norm = torch.norm(a2)
+        if a2_norm == 0:
+            raise ValueError("Zero vector encountered in a2 normalization.")
+        a2 = a2 / a2_norm
+
+        # Compute a3 as cross product of a1 and a2
+        a3 = torch.cross(a1, a2)
+
+        # Stack into rotation matrix
+        rotation_matrix = torch.stack((a1, a2, a3), dim=1)
+
+        return rotation_matrix
+
+    else:
+        raise TypeError("Input type is not supported")
 
 #rotation5d batch*5
 def normalize_5d_rotation( r5d):

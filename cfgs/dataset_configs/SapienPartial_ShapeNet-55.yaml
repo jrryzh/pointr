@@ -5,6 +5,7 @@ DATA_PATH: ./data/SapienRendered
 OBJ_PATH: ./data/SapienRendered_objs
 CATE_NUM: 6
 
+GAUSSIAN_NOISE: True
 N_POINTS: 8192
 N_RENDERINGS: 300
 # PARTIAL_POINTS_PATH: /mnt/test/data/shapenet/shapenetcorev2_render_output2/

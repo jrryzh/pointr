@@ -263,13 +263,12 @@ def estimate():
                 scene_id = path.split('/')[-2].split('_')[-1]
                 image_id = path.split('/')[-1]
                 create_folder(result_folder)
-                # # 反转yz得到原始点云
                 save_to_obj_pts(_backproj_pcd, os.path.join(result_folder, '{}_{}_{}_original_cam.obj'.format(scene_id, image_id, categories[cate_id + 1])))
                 # 其他保存
                 # save_to_obj_pts(obsv_pcd, os.path.join(result_folder, '{}_{}_{}_pre_input.obj'.format(scene_id, image_id, categories[cate_id + 1]))) # 观察下方向
-                # save_to_obj_pts(input_pcd, os.path.join(result_folder, '{}_{}_{}_final_input.obj'.format(scene_id, image_id, categories[cate_id + 1])))
-                # save_to_obj_pts(coarse_points_np, os.path.join(result_folder, '{}_{}_{}_coarse_complete.obj'.format(scene_id, image_id, categories[cate_id + 1])))
-                # save_to_obj_pts(dense_points_np, os.path.join(result_folder, '{}_{}_{}_dense_complete.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+                save_to_obj_pts(input_pcd, os.path.join(result_folder, '{}_{}_{}_final_input.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+                save_to_obj_pts(coarse_points_np, os.path.join(result_folder, '{}_{}_{}_coarse_complete.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+                save_to_obj_pts(dense_points_np, os.path.join(result_folder, '{}_{}_{}_dense_complete.obj'.format(scene_id, image_id, categories[cate_id + 1])))
             '''
             ###############################
             # Step 3 Post-processing 
@@ -304,7 +303,8 @@ def estimate():
             pred_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(pred_rotat_mat_np) 
             # pred_sRT[1, :3] = pred_sRT[1, :3]
             # pred_sRT[2, :3] = -pred_sRT[2, :3]
-            cluster_center = np.mean(input_pcd, axis=1) # obsv_pcd: 初始 _input_pcd: 正则化后 input_pcd: 旋转后
+            # import ipdb; ipdb.set_trace()
+            cluster_center = np.mean(input_pcd, axis=0) # obsv_pcd: 初始 _input_pcd: 正则化后 input_pcd: 旋转后
             pred_sRT[0, 3] = (centroid_seg[0] + (centroid[0] + (cluster_center[0] + pred_trans_mat_np[0]) * s_factor) * s_factor_seg)
             pred_sRT[1, 3] = (centroid_seg[1] + (centroid[1] + (cluster_center[1] + pred_trans_mat_np[1]) * s_factor) * s_factor_seg)
             pred_sRT[2, 3] = (centroid_seg[2] + (centroid[2] + (cluster_center[2] + pred_trans_mat_np[2]) * s_factor) * s_factor_seg)
@@ -313,18 +313,18 @@ def estimate():
             # pred_sRT[2, 3] = pred_trans_mat_np[2]
             f_sRT[i] = pred_sRT
             
-            if opt.pcd_isSave:
-                print('保存点云到', result_folder)
-                scene_id = path.split('/')[-2].split('_')[-1]
-                image_id = path.split('/')[-1]
-                bbox_3d = get_3d_bbox(f_size[i], 0)
-                transformed_bbox_3d = transform_coordinates_3d(bbox_3d, pred_sRT)
-                save_to_obj_pts(transformed_bbox_3d.transpose(), os.path.join(result_folder, '{}_{}_{}_predicted_bbox.obj'.format(scene_id, image_id, categories[cate_id + 1])))
+            # if opt.pcd_isSave:
+            #     print('保存点云到', result_folder)
+            #     scene_id = path.split('/')[-2].split('_')[-1]
+            #     image_id = path.split('/')[-1]
+            #     bbox_3d = get_3d_bbox(f_size[i], 0)
+            #     transformed_bbox_3d = transform_coordinates_3d(bbox_3d, pred_sRT)
+            #     save_to_obj_pts(transformed_bbox_3d.transpose(), os.path.join(result_folder, '{}_{}_{}_predicted_bbox.obj'.format(scene_id, image_id, categories[cate_id + 1])))
 
             inst_count += 1
         img_count += 1
         
-        if img_count == 5:
+        if img_count == 20:
             import ipdb; ipdb.set_trace()
 
         # save results
@@ -354,8 +354,10 @@ def estimate():
         # _draw_detections(raw_rgb[:, :, ::-1], result_folder, 'd435', f'{img_count:04}', intrinsics, f_sRT, f_size, f_class_id,
         #     [], [], [], [], [], [], draw_gt=False, draw_nocs=False)
         if opt.img_isSave:
+            scene_id = path.split('/')[-2].split('_')[-1]
+            image_id = path.split('/')[-1]
             gt_img = raw_rgb[:, :, ::-1].copy()
-            draw_detections(raw_rgb[:, :, ::-1], result_folder, 'pred', f'{img_count-1:04}', intrinsics, f_sRT, f_size, f_class_id)  
+            draw_detections(raw_rgb[:, :, ::-1], result_folder, 'pred', f'{scene_id}_{image_id}', intrinsics, f_sRT, f_size, f_class_id)  
             # draw_detections(gt_img, result_folder, 'gt', f'{img_count-1:04}', intrinsics, gts['poses'], gts['size'], gts['class_ids'])
     # write statistics
     fw = open('{0}/eval_logs.txt'.format(result_folder), 'a')
@@ -367,7 +369,6 @@ def estimate():
         print(msg)
         fw.write(msg + '\n')
     fw.close()
-
 
 def evaluate():
     degree_thres_list = list(range(0, 61, 1))
@@ -446,7 +447,7 @@ if __name__ == "__main__":
     parser.add_argument('--config',help='config file path')
     parser.add_argument('--ckpts', help='ckpt')
     ##### 等待优化掉 #######
-    parser.add_argument('--data_type', type=str, default='real_test', help='cam_val, real_test')
+    parser.add_argument('--data_type', type=str, default='cam_val', help='cam_val, real_test')
     parser.add_argument('--data_folder', type=str, default='./data/NOCS', help='data directory')
     parser.add_argument('--results_folder', type=str, default='./results/NOCS', help='root path for saving results')
     # parser.add_argument('--temp_folder', type=str, default='../data/NOCS/template_FPS', help='root path for saving template')

@@ -14,6 +14,88 @@ import _pickle as cPickle
 from tqdm import tqdm
 
 
+# 添加噪音
+def add_gaussian_noise(point_cloud, mean=0.0, std_dev=0.01):
+    """
+    在点云数据上添加高斯噪声。
+
+    参数：
+    - point_cloud: 原始点云数据，形状为(N, 3)的NumPy数组。
+    - mean: 高斯噪声的均值。
+    - std_dev: 高斯噪声的标准差。
+
+    返回：
+    - noisy_point_cloud: 添加噪声后的点云数据。
+    """
+    noise = np.random.normal(mean, std_dev, point_cloud.shape)
+    noisy_point_cloud = point_cloud + noise
+    return noisy_point_cloud
+
+import torch
+# add rotation loss
+def _geodesic_rotation_error(R_pred, R_label, eps=1e-7):
+    """
+    计算预测和真实旋转矩阵之间的旋转误差。
+
+    参数：
+        R_pred (torch.Tensor): 预测的旋转矩阵，形状为 (B, 3, 3)
+        R_label (torch.Tensor): 真实的旋转矩阵，形状为 (B, 3, 3)
+        eps (float): 防止数值问题的小常数
+
+    返回：
+        mean_loss (torch.Tensor): 批量平均旋转误差，标量
+        loss (torch.Tensor): 每个样本的旋转误差，形状为 (B,)
+    """
+    # 计算相对旋转矩阵
+    R_rel = torch.matmul(R_label, R_pred.transpose(-1, -2))
+
+    # 计算相对旋转矩阵的迹
+    trace = R_rel[..., 0, 0] + R_rel[..., 1, 1] + R_rel[..., 2, 2]
+
+    # 计算旋转角度 θ
+    cos_theta = (trace - 1) / 2
+
+    # 为了避免数值问题，将 cos_theta 限制在 [-1 + eps, 1 - eps] 范围内
+    cos_theta = torch.clamp(cos_theta, -1 + eps, 1 - eps)
+
+    # 计算 θ
+    theta = torch.acos(cos_theta)
+
+    # 旋转误差即为 θ
+    loss = theta
+
+    # 计算批量平均误差
+    mean_loss = torch.mean(loss)
+
+    return mean_loss, loss
+
+def geodesic_rotation_error(R_pred, R_label, eps=1e-7):
+    # 计算相对旋转矩阵
+    R_rel = torch.matmul(R_label, R_pred.transpose(-1, -2))
+
+    # 计算相对旋转矩阵的迹
+    trace = R_rel[..., 0, 0] + R_rel[..., 1, 1] + R_rel[..., 2, 2]
+
+    # 计算旋转角度 θ
+    cos_theta = (trace - 1) / 2
+
+    # 为了避免数值问题，将 cos_theta 限制在 [-1, 1] 范围内
+    cos_theta = torch.clamp(cos_theta, -1.0, 1.0)
+
+    theta = torch.acos(cos_theta)
+
+    # 处理接近 0 的小角度
+    theta = torch.where(theta < eps, torch.zeros_like(theta), theta)
+
+    # 处理接近 π 的大角度
+    theta = torch.where((torch.abs(cos_theta + 1.0) < eps), torch.tensor(np.pi).to(theta.device), theta)
+
+    loss = theta
+    mean_loss = torch.mean(loss)
+
+    return mean_loss, loss
+
+
 
 def setup_logger(logger_name, log_file, level=logging.INFO):
     logger = logging.getLogger(logger_name)

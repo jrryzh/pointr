@@ -11,8 +11,9 @@ from extensions.chamfer_dist import ChamferDistanceL1
 from .build import MODELS, build_model_from_cfg
 from models.Transformer_utils import *
 from utils import misc
-from utils.utils_pose import geodesic_rotation_error
+
 from utils import convert_rotation
+from utils.utils_pose import save_to_obj_pts
 
 
 class SelfAttnBlockApi(nn.Module):
@@ -894,15 +895,12 @@ class PCTransformer(nn.Module):
 ######################################## PoinTr ########################################  
 
 @MODELS.register_module()
-class AdaPoinTr_Pose(nn.Module):
+class AdaPoinTr_Pose_CAMLOSS(nn.Module):
     def __init__(self, config, **kwargs):
         super().__init__()
         
         # NEW: 根据cate_num 指定输出维度
         self.cate_num = config.cate_num
-        
-        # NEW: 得到rotate loss计算方式
-        self.rotate_loss_type = config.pose_config.rotate_loss_type
         
         # TODO: 设计如何对应mapping
         self.mapping = {
@@ -992,7 +990,7 @@ class AdaPoinTr_Pose(nn.Module):
     def build_loss_func(self):
         self.loss_func = ChamferDistanceL1()
 
-    def get_loss(self, ret, gt, gt_taxonomys, gt_rotat_mat, gt_trans_mat, gt_size_mat, epoch=1):
+    def get_loss(self, ret, gt, gt_taxonomys, gt_rotat_mat, gt_trans_mat, gt_size_mat, gt_centroid, gt_scale, gt_cam_partial_pcs, gt_cam_complete_pcs, gt_canonical_pcs, epoch=1):
         
         pred_coarse, denoised_coarse, denoised_fine, pred_fine, pred_rotat_mat, pred_trans_mat, pred_size_mat = ret
         # import ipdb; ipdb.set_trace()
@@ -1015,7 +1013,14 @@ class AdaPoinTr_Pose(nn.Module):
         # pose loss
         # loss_rotat = nn.SmoothL1Loss()(pred_rotat_mat, gt_rotat_mat)
         # 做个修改，这里rotate_mat 变成（12， 6）了 先匹配loss最小的再返回那个loss
+        ## my implemenation
+        # minloss_pred_rotat_mat_list = []
+        # for gt_rotat_mat, pred_rotat_mat_lst in zip(gt_rotat_mat, pred_rotat_mat):
+        #     idx = torch.argmin([nn.SmoothL1Loss()(pred_rotat_mat, gt_rotat_mat) for pred_rotat_mat in pred_rotat_mat_lst])
+        #     minloss_pred_rotat_mat_list.append(pred_rotat_mat_lst[idx])
+        # loss_rotat = nn.SmoothL1Loss()(torch.stack(minloss_pred_rotat_mat_list), gt_rotat_mat)
         
+        ## gpt implementation
         # TODO: 检查正确性
         gt_cate_ids = torch.tensor([self.mapping[tax] for tax in gt_taxonomys]).cuda()
         index = gt_cate_ids.squeeze() + torch.arange(gt.shape[0], dtype=torch.long).cuda() * self.cate_num
@@ -1027,35 +1032,67 @@ class AdaPoinTr_Pose(nn.Module):
         pred_rotat_mat = torch.index_select(pred_rotat_mat, 0, index).contiguous()  # bs x 6
         
         minloss_gt_rotat_mat_list = []
-        if self.rotate_loss_type == 'l1':
-            loss_fn =nn.SmoothL1Loss()
-            for gt_mat_list_6d, pred_mat_6d in zip(gt_rotat_mat, pred_rotat_mat):
-                losses = torch.tensor([loss_fn(pred_mat_6d【0】, gt_mat) for gt_mat in gt_mat_list_6d])
-                idx = torch.argmin(losses)
-                minloss_gt_rotat_mat_list.append(gt_mat_list_6d[idx])
+        loss_fn = nn.SmoothL1Loss()
+        # print('检查原始输入')
+        # print('gt_rotat_mat.shape', gt_rotat_mat.shape)
+        # print('pred_rotat_mat.shape', pred_rotat_mat.shape)
+        
+        for gt_mat_list, pred_mat in zip(gt_rotat_mat, pred_rotat_mat):
+            # print('检查内部输入')
+            # print('gt_mat_list.shape', gt_mat_list.shape)
+            # print('pred_mat.shape', pred_mat.shape)
+            # print('gt_mat_list[0].shape', gt_mat_list[0].shape)
+            losses = torch.tensor([loss_fn(pred_mat, gt_mat) for gt_mat in gt_mat_list])
+            idx = torch.argmin(losses)
+            # print('idx', idx)
+            minloss_gt_rotat_mat_list.append(gt_mat_list[idx])
 
-            minloss_gt_rotat_mat_stack = torch.stack(minloss_gt_rotat_mat_list)
-
-        elif self.rotate_loss_type == 'geodesic':
-            loss_fn = geodesic_rotation_error
-            for gt_mat_list_6d, pred_mat_6d in zip(gt_rotat_mat, pred_rotat_mat):
-                gt_mat_list = convert_rotation.compute_rotation_matrix_from_ortho6d(gt_mat_list_6d)
-                pred_mat = convert_rotation.single_rotation_matrix_from_ortho6d(pred_mat_6d)
-                losses = torch.tensor([loss_fn(pred_mat, gt_mat)[1] for gt_mat in gt_mat_list])
-                idx = torch.argmin(losses)
-                minloss_gt_rotat_mat_list.append(gt_mat_list_6d[idx])
-
-            minloss_gt_rotat_mat_stack = torch.stack(minloss_gt_rotat_mat_list)
-            
-        if self.rotate_loss_type == 'l1':
-            loss_rotat = nn.SmoothL1Loss()(minloss_gt_rotat_mat_stack, pred_rotat_mat)
-        elif self.rotate_loss_type == 'geodesic':
-            r1, r2 = convert_rotation.compute_rotation_matrix_from_ortho6d(minloss_gt_rotat_mat_stack), convert_rotation.compute_rotation_matrix_from_ortho6d(pred_rotat_mat) 
-            loss_rotat, loss_rotat_all = geodesic_rotation_error(r1, r2)
+        minloss_gt_rotat_mat_stack = torch.stack(minloss_gt_rotat_mat_list)
+        # print('minloss_gt_rotat_mat_stack.shape, pred_rotat_mat.shape', minloss_gt_rotat_mat_stack.shape, pred_rotat_mat.shape)
+        loss_rotat = loss_fn(minloss_gt_rotat_mat_stack, pred_rotat_mat)
         loss_trans = nn.SmoothL1Loss()(pred_trans_mat, gt_trans_mat)
         loss_size = nn.SmoothL1Loss()(pred_size_mat, gt_size_mat)
+        
+        #### TODO: add camloss ######
+        # import ipdb; ipdb.set_trace() 
+        pred_pose = torch.zeros((pred_size_mat.shape[0], 4, 4)).cuda()
+        pred_pose[:, :3, :3] = convert_rotation.compute_rotation_matrix_from_ortho6d(pred_rotat_mat)
+        pred_pose[:, 0, 3] = (pred_trans_mat[:, 0]) * gt_scale + gt_centroid[:, 0]
+        pred_pose[:, 1, 3] = (pred_trans_mat[:, 1]) * gt_scale + gt_centroid[:, 1]
+        pred_pose[:, 2, 3] = (pred_trans_mat[:, 2]) * gt_scale + gt_centroid[:, 2]
+        pred_pose[:, 3, 3] = 1.0
+        # 应用变换  
+        bs, n = pred_fine.shape[0], pred_fine.shape[1]
+        ones = torch.ones((bs, n, 1), device=pred_fine.device)
+        pred_fine_homo = torch.cat([pred_fine, ones], dim=-1)
+        cam_pred_fine = torch.matmul(pred_fine_homo, pred_pose.transpose(1,2))[:, :, :3]
+        # 计算camloss
+        loss_cam = self.loss_func(cam_pred_fine, gt_cam_complete_pcs)
+        
+        ################ 验证camloss ###############
+        # gt_pose = torch.zeros((pred_size_mat.shape[0], 4, 4)).cuda()
+        # gt_pose[:, :3, :3] = convert_rotation.compute_rotation_matrix_from_ortho6d(minloss_gt_rotat_mat_stack)
+        # gt_pose[:, 0, 3] = (gt_trans_mat[:, 0]) * gt_scale + gt_centroid[:, 0]
+        # gt_pose[:, 1, 3] = (gt_trans_mat[:, 1]) * gt_scale + gt_centroid[:, 1]
+        # gt_pose[:, 2, 3] = (gt_trans_mat[:, 2]) * gt_scale + gt_centroid[:, 2]
+        # gt_pose[:, 3, 3] = 1.0
+        # # 应用变换  
+        # bs, n = gt_canonical_pcs.shape[0], gt_canonical_pcs.shape[1]
+        # ones = torch.ones((bs, n, 1), device=gt_canonical_pcs.device)
+        # gt_canonical_pcs_homo = torch.cat([gt_canonical_pcs, ones], dim=-1)
+        # cam_gt_canonical_pcs = torch.matmul(gt_canonical_pcs_homo, gt_pose.transpose(1,2))[:, :, :3]
+        # loss_cam_gt = self.loss_func(cam_gt_canonical_pcs, gt_cam_complete_pcs)
+        # for i in range(cam_gt_canonical_pcs.shape[0]):
+        #     save_to_obj_pts(cam_gt_canonical_pcs[i], '/data/nas/zjy/code_repo/pointr/tmp/test0920/gt_cam_complete_pc_{}.obj'.format(i))
+        #     save_to_obj_pts(gt_cam_complete_pcs[i], '/data/nas/zjy/code_repo/pointr/tmp/test0920/pred_cam_complete_pc_{}.obj'.format(i))
+        # # print(loss_cam.item(), loss_cam_gt.item())
+        # import ipdb; ipdb.set_trace()
+        ############# 验证camloss ###############
 
-        return loss_denoised, loss_recon, loss_rotat, loss_trans, loss_size
+
+        
+        # return loss_denoised, loss_recon, loss_rotat, loss_trans, loss_size, loss_cam
+        return 0, 0, 0, 0, loss_size, loss_cam
 
     def forward(self, xyz):
         q, coarse_point_cloud, denoise_length = self.base_model(xyz) # B M C and B M 3
