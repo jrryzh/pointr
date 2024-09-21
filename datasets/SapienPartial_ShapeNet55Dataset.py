@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from utils.utils_pose import save_to_obj_pts, add_gaussian_noise
 
 ##################### 调节是否debug 缩减长度 #########################
-DEBUG = True
+DEBUG = False
 ###################################################################
 
 
