@@ -13,6 +13,11 @@ from utils import utils_pose
 from torch.utils.data import DataLoader
 from utils.utils_pose import save_to_obj_pts, add_gaussian_noise
 
+##################### 调节是否debug 缩减长度 #########################
+DEBUG = True
+###################################################################
+
+
 _categories = {
     '02691156': 'airplane', 
     '02747177': 'ashcan',
@@ -119,6 +124,9 @@ class SapienPartial_ShapeNet(data.Dataset):
                             'pcd_path': os.path.join(line, f'{idx:04}_pcd.obj'),
                             'rgb_path': os.path.join(line, f'{idx:04}_rgb.png')
                         })
+                    
+            if DEBUG:
+                break
             elif self.subset == 'val':
                 for idx in range(0, 500, 13):
                     self.file_list.append({
@@ -130,6 +138,8 @@ class SapienPartial_ShapeNet(data.Dataset):
                             'pcd_path': os.path.join(line, f'{idx:04}_pcd.obj'),
                             'rgb_path': os.path.join(line, f'{idx:04}_rgb.png')
                         })
+            if DEBUG:
+                break
             else:
                 # if taxonomy_id != '02942699':
                 #     continue
@@ -143,9 +153,11 @@ class SapienPartial_ShapeNet(data.Dataset):
                             'pcd_path': os.path.join(line, f'{idx:04}_pcd.obj'),
                             'rgb_path': os.path.join(line, f'{idx:04}_rgb.png')
                         })
+            if DEBUG:
+                break
 
-        # DEBUG
-        # self.file_list = self.file_list[:200]
+        if DEBUG:
+            self.file_list = self.file_list[:200]
         
         print(f'[DATASET] {len(self.file_list)} instances were loaded')
         
@@ -192,16 +204,16 @@ class SapienPartial_ShapeNet(data.Dataset):
         data['partial'], centroid, scale = misc.pc_normalize(partial_pc)
         data['gt'] = (complete_pc - centroid) / scale
         
-        DEBUG = True
-        # if DEBUG:
-        #     save_to_obj_pts(data['partial'], f'./tmp/test0918/{idx}_partial.obj')
-        #     save_to_obj_pts(data['gt'], f'./tmp/test0918/{idx}_gt.obj')
+        # DEBUG = False
+        # # if DEBUG:
+        # #     save_to_obj_pts(data['partial'], f'./tmp/test0918/{idx}_partial.obj')
+        # #     save_to_obj_pts(data['gt'], f'./tmp/test0918/{idx}_gt.obj')
             
-        if DEBUG:
-            taxonomy_id =sample['taxonomy_id']
-        # #     save_to_obj_pts(_complete_pc, f'./tmp/test0918/{_categories[taxonomy_id]}_{idx}_pointr.obj')
-        #     save_to_obj_pts(complete_pc, f'./tmp/test0919/{_categories[taxonomy_id]}_{idx}_convert_pointr.obj')
-            save_to_obj_pts(partial_pc, f'./tmp/test0921/{_categories[taxonomy_id]}_{idx}_partial.obj')
+        # if DEBUG:
+        #     taxonomy_id =sample['taxonomy_id']
+        # # #     save_to_obj_pts(_complete_pc, f'./tmp/test0918/{_categories[taxonomy_id]}_{idx}_pointr.obj')
+        # #     save_to_obj_pts(complete_pc, f'./tmp/test0919/{_categories[taxonomy_id]}_{idx}_convert_pointr.obj')
+        #     save_to_obj_pts(partial_pc, f'./tmp/test0921/{_categories[taxonomy_id]}_{idx}_partial.obj')
         
         ##### R T s #####
         # rotate_mat = convert_rotation.single_rotation_matrix_to_ortho6d(_pose[:3, :3]).flatten()
@@ -220,11 +232,11 @@ class SapienPartial_ShapeNet(data.Dataset):
         else:
             rotate_mat = np.expand_dims(convert_rotation.single_rotation_matrix_to_ortho6d(_pose[:3, :3]).flatten(), axis=0).repeat(12, axis=0)
         ##################
-        if DEBUG:
-            for i, rotate in enumerate(rotate_mat):
-                test_pose = _pose
-                test_pose[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(rotate)
-                save_to_obj_pts(utils_pose.apply_transformation(_complete_pc, test_pose), f'./tmp/test0920/{_categories[sample["taxonomy_id"]]}_{idx}_rotate_{i}.obj')
+        # if DEBUG:
+        #     for i, rotate in enumerate(rotate_mat):
+        #         test_pose = _pose
+        #         test_pose[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(rotate)
+        #         save_to_obj_pts(utils_pose.apply_transformation(_complete_pc, test_pose), f'./tmp/test0920/{_categories[sample["taxonomy_id"]]}_{idx}_rotate_{i}.obj')
         
         if self.subset == 'train' or self.subset == 'val':
             return sample['taxonomy_id'], sample['model_id'], (data['partial'].astype(np.float32), data['gt'].astype(np.float32), rotate_mat.astype(np.float32), trans_mat.astype(np.float32), size_mat.astype(np.float32), centroid.astype(np.float32), scale.astype(np.float32), partial_pc.astype(np.float32), complete_pc.astype(np.float32), _complete_pc.astype(np.float32), sample['rgb_path'])
