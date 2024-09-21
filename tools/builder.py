@@ -20,14 +20,16 @@ def dataset_builder(args, config):
                                             num_workers = int(args.num_workers),
                                             drop_last = config.others.subset == 'train',
                                             worker_init_fn = worker_init_fn,
-                                            sampler = sampler)
+                                            sampler = sampler,
+                                            prefetch_factor=2)
     else:
         sampler = None
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.others.bs if shuffle else 1,
                                                 shuffle = shuffle, 
                                                 drop_last = config.others.subset == 'train',
                                                 num_workers = int(args.num_workers),
-                                                worker_init_fn=worker_init_fn)
+                                                worker_init_fn=worker_init_fn,
+                                                prefetch_factor=2)
     return sampler, dataloader
 
 def model_builder(config):
