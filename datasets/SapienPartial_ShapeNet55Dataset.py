@@ -125,8 +125,8 @@ class SapienPartial_ShapeNet(data.Dataset):
                             'rgb_path': os.path.join(line, f'{idx:04}_rgb.png')
                         })
                     
-            if DEBUG:
-                break
+                if DEBUG:
+                    break
             elif self.subset == 'val':
                 for idx in range(0, 500, 13):
                     self.file_list.append({
@@ -138,8 +138,8 @@ class SapienPartial_ShapeNet(data.Dataset):
                             'pcd_path': os.path.join(line, f'{idx:04}_pcd.obj'),
                             'rgb_path': os.path.join(line, f'{idx:04}_rgb.png')
                         })
-            if DEBUG:
-                break
+                if DEBUG:
+                    break
             else:
                 # if taxonomy_id != '02942699':
                 #     continue
@@ -153,8 +153,8 @@ class SapienPartial_ShapeNet(data.Dataset):
                             'pcd_path': os.path.join(line, f'{idx:04}_pcd.obj'),
                             'rgb_path': os.path.join(line, f'{idx:04}_rgb.png')
                         })
-            if DEBUG:
-                break
+                if DEBUG:
+                    break
 
         if DEBUG:
             self.file_list = self.file_list[:200]

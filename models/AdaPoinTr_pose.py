@@ -1030,7 +1030,7 @@ class AdaPoinTr_Pose(nn.Module):
         if self.rotate_loss_type == 'l1':
             loss_fn =nn.SmoothL1Loss()
             for gt_mat_list_6d, pred_mat_6d in zip(gt_rotat_mat, pred_rotat_mat):
-                losses = torch.tensor([loss_fn(pred_mat_6d[0], gt_mat) for gt_mat in gt_mat_list_6d])
+                losses = torch.tensor([loss_fn(pred_mat_6d, gt_mat) for gt_mat in gt_mat_list_6d])
                 idx = torch.argmin(losses)
                 minloss_gt_rotat_mat_list.append(gt_mat_list_6d[idx])
 
