@@ -94,7 +94,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
         
         if config.model.NAME == "AdaPoinTr_Pose_CAMLOSS":
             losses = AverageMeter(['SparseLoss', 'DenseLoss', 'RotatLoss', 'TransLoss', 'SizeLoss', 'CamLoss'])
-        elif config.model.NAME == "AdaPoinTr_Pose":
+        elif config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature":
             losses = AverageMeter(['SparseLoss', 'DenseLoss', 'RotatLoss', 'TransLoss', 'SizeLoss'])
         else:
             losses = AverageMeter(['SparseLoss', 'DenseLoss'])
@@ -146,7 +146,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
            
             ret = base_model(partial)
             
-            if config.model.NAME == "AdaPoinTr_Pose": # base_model.__name__
+            if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature": # base_model.__name__
                 sparse_loss, dense_loss, rotat_loss, trans_loss, size_loss = base_model.module.get_loss(ret, gt, taxonomy_ids, gt_rotate_mat, gt_trans_mat, gt_size_mat, epoch)
                 
                 _loss = sparse_loss + dense_loss + rotat_loss + trans_loss + size_loss
@@ -170,7 +170,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
                 optimizer.step()
                 base_model.zero_grad()
 
-            if config.model.NAME == "AdaPoinTr_Pose":
+            if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature":
                 if args.distributed:
                     sparse_loss = dist_utils.reduce_tensor(sparse_loss, args)
                     dense_loss = dist_utils.reduce_tensor(dense_loss, args)
@@ -209,7 +209,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
             if train_writer is not None:
                 train_writer.add_scalar('Loss/Batch/Sparse', sparse_loss.item() * 1000, n_itr)
                 train_writer.add_scalar('Loss/Batch/Dense', dense_loss.item() * 1000, n_itr)
-                if config.model.NAME == "AdaPoinTr_Pose":
+                if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature":
                     train_writer.add_scalar('Loss/Batch/Rotat', rotat_loss.item() * 1000,  n_itr)
                     train_writer.add_scalar('Loss/Batch/Trans', trans_loss.item() * 1000,  n_itr)
                     train_writer.add_scalar('Loss/Batch/Size', size_loss.item() * 1000,  n_itr)
@@ -241,7 +241,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
         if train_writer is not None:
             train_writer.add_scalar('Loss/Epoch/Sparse', losses.avg(0), epoch)
             train_writer.add_scalar('Loss/Epoch/Dense', losses.avg(1), epoch)
-            if config.model.NAME == "AdaPoinTr_Pose":
+            if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature":
                 train_writer.add_scalar('Loss/Epoch/Rotate', losses.avg(2), epoch)
                 train_writer.add_scalar('Loss/Epoch/Trans', losses.avg(3), epoch)
                 train_writer.add_scalar('Loss/Epoch/Size', losses.avg(4), epoch)
@@ -285,7 +285,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
 
     if config.model.NAME == "AdaPoinTr_Pose_CAMLOSS":
         test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2', 'RotatLoss', 'TransLoss', 'SizeLoss', 'CamLoss'])
-    elif config.model.NAME == "AdaPoinTr_Pose":
+    elif config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature":
         test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2', 'RotatLoss', 'TransLoss', 'SizeLoss'])
     else:
         test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2'])    
@@ -333,7 +333,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
             dense_loss_l1 =  ChamferDisL1(dense_points, gt)
             dense_loss_l2 =  ChamferDisL2(dense_points, gt)
             
-            if config.model.NAME == "AdaPoinTr_Pose":
+            if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature":
                 pred_rotat_mat = ret[2]
                 pred_trans_mat = ret[3]
                 pred_size_mat = ret[4]
@@ -420,7 +420,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
                 sparse_loss_l2 = dist_utils.reduce_tensor(sparse_loss_l2, args)
                 dense_loss_l1 = dist_utils.reduce_tensor(dense_loss_l1, args)
                 dense_loss_l2 = dist_utils.reduce_tensor(dense_loss_l2, args)
-                if config.model.NAME == "AdaPoinTr_Pose":
+                if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature":
                     ############### pose matrix loss ################
                     rotat_loss = dist_utils.reduce_tensor(rotat_loss, args)
                     trans_loss = dist_utils.reduce_tensor(trans_loss, args)
@@ -434,7 +434,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
                     cam_loss = dist_utils.reduce_tensor(cam_loss, args)
                     
                 
-            if config.model.NAME == "AdaPoinTr_Pose":
+            if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature":
                 test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000, rotat_loss.item() * 1000, trans_loss.item() * 1000, size_loss.item() * 1000])
             elif config.model.NAME == "AdaPoinTr_Pose_CAMLOSS":
                 test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000, rotat_loss.item() * 1000, trans_loss.item() * 1000, size_loss.item() * 1000, cam_loss.item() * 1000])

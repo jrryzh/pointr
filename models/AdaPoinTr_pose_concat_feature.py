@@ -764,6 +764,9 @@ class SimpleRebuildFCLayer(nn.Module):
 class PCTransformer(nn.Module):
     def __init__(self, config):
         super().__init__()
+        ## NEW: 提前引出global feature###
+        self.pre_global_feature = config.pre_global_feature
+        #################################
         encoder_config = config.encoder_config
         decoder_config = config.decoder_config
         self.center_num  = getattr(config, 'center_num', [512, 128])
@@ -878,7 +881,10 @@ class PCTransformer(nn.Module):
             # forward decoder
             q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor, denoise_length=denoise_length)
 
-            return q, coarse, denoise_length
+            if self.pre_global_feature:
+                return q, coarse, denoise_length, global_feature
+            else:
+                return q, coarse, denoise_length
 
         else:
             # produce query
@@ -889,13 +895,15 @@ class PCTransformer(nn.Module):
             
             # forward decoder
             q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor)
-
-            return q, coarse, 0
+            if self.pre_global_feature:
+                return q, coarse, 0, global_feature
+            else:
+                return q, coarse, 0
 
 ######################################## PoinTr ########################################  
 
 @MODELS.register_module()
-class AdaPoinTr_Pose(nn.Module):
+class AdaPoinTr_Pose_concat_feature(nn.Module):
     def __init__(self, config, **kwargs):
         super().__init__()
         
@@ -967,6 +975,10 @@ class AdaPoinTr_Pose(nn.Module):
         ############# 添加分支预测 rotate trans size ############
         if config.pose_config.normalize_head:
             self.rotat_head = nn.Sequential(
+                nn.Linear(2048, 1024),
+                nn.BatchNorm1d(1024),
+                nn.GELU(),
+                nn.Dropout(p=0.1),
                 nn.Linear(1024, 512),
                 nn.BatchNorm1d(512),
                 nn.GELU(),
@@ -978,6 +990,10 @@ class AdaPoinTr_Pose(nn.Module):
                 nn.Linear(256, 6 * self.cate_num),
             )
             self.trans_head = nn.Sequential(
+                nn.Linear(2048, 1024),
+                nn.BatchNorm1d(1024),
+                nn.GELU(),
+                nn.Dropout(p=0.1),
                 nn.Linear(1024, 512),
                 nn.BatchNorm1d(512),
                 nn.GELU(),
@@ -989,6 +1005,10 @@ class AdaPoinTr_Pose(nn.Module):
                 nn.Linear(256, 3 * self.cate_num),
             )
             self.size_head = nn.Sequential(
+                nn.Linear(2048, 1024),
+                nn.BatchNorm1d(1024),
+                nn.GELU(),
+                nn.Dropout(p=0.1),
                 nn.Linear(1024, 512),
                 nn.BatchNorm1d(512),
                 nn.GELU(),
@@ -1001,14 +1021,19 @@ class AdaPoinTr_Pose(nn.Module):
             )
         else:
             self.rotat_head = nn.Sequential(
+                nn.Linear(2048, 1024),
+                nn.GELU(),
                 nn.Linear(1024, 512),
                 nn.GELU(),
                 nn.Linear(512, 256),
                 nn.GELU(),
                 nn.Linear(256, 6*self.cate_num),
             )
+
             
             self.trans_head = nn.Sequential(
+                nn.Linear(2048, 1024),
+                nn.GELU(),
                 nn.Linear(1024, 512),
                 nn.GELU(),
                 nn.Linear(512, 256),
@@ -1017,6 +1042,8 @@ class AdaPoinTr_Pose(nn.Module):
             )
             
             self.size_head = nn.Sequential(
+                nn.Linear(2048, 1024),
+                nn.GELU(),
                 nn.Linear(1024, 512),
                 nn.GELU(),
                 nn.Linear(512, 256),
@@ -1094,7 +1121,7 @@ class AdaPoinTr_Pose(nn.Module):
         return loss_denoised, loss_recon, loss_rotat, loss_trans, loss_size
 
     def forward(self, xyz):
-        q, coarse_point_cloud, denoise_length = self.base_model(xyz) # B M C and B M 3
+        q, coarse_point_cloud, denoise_length, pre_global_feature = self.base_model(xyz) # B M C and B M 3
     
         B, M ,C = q.shape
 
@@ -1119,10 +1146,10 @@ class AdaPoinTr_Pose(nn.Module):
         # ###########################################
         
         ############# 添加分支预测 rotate trans size ############
-        
-        rotation_mat = self.rotat_head(global_feature)
-        trans_mat = self.trans_head(global_feature)
-        size_mat = self.size_head(global_feature)
+        concated_global_feature = torch.cat([pre_global_feature, global_feature], dim=1)
+        rotation_mat = self.rotat_head(concated_global_feature)
+        trans_mat = self.trans_head(concated_global_feature)
+        size_mat = self.size_head(concated_global_feature)
         
         ########################################################
         

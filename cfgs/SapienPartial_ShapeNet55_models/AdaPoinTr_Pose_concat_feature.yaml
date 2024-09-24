@@ -31,7 +31,7 @@ dataset : {
             others: {subset: 'test'}}}
             
 model : {
-    NAME: AdaPoinTr_Pose, 
+    NAME: AdaPoinTr_Pose_concat_feature, 
     # NEW
     cate_num: 6,
     num_query: 512, 
@@ -40,7 +40,7 @@ model : {
     global_feature_dim: 1024, 
     encoder_type: graph,
     decoder_type: fc,
-    pre_global_feature: False,
+    pre_global_feature: True,
     encoder_config: {
       embed_dim: 384,
       depth: 6, # 6
@@ -65,7 +65,7 @@ model : {
     },
     pose_config: {
       rotat_feature: 'rebuild_feature',
-      normalize_head: True,
+      normalize_head: False,
       rotate_loss_type: 'l1' # l1 geodesic
     }
 }

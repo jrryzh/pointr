@@ -8,3 +8,4 @@ import models.SnowFlakeNet
 import models.AdaPoinTr
 import models.AdaPoinTr_pose
 import models.AdaPoinTr_pose_camloss
+import models.AdaPoinTr_pose_concat_feature
