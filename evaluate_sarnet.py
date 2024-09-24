@@ -447,7 +447,7 @@ if __name__ == "__main__":
     parser.add_argument('--config',help='config file path')
     parser.add_argument('--ckpts', help='ckpt')
     ##### 等待优化掉 #######
-    parser.add_argument('--data_type', type=str, default='real_test', help='cam_val, real_test')
+    parser.add_argument('--data_type', type=str, default='cam_val', help='cam_val, real_test')
     parser.add_argument('--data_folder', type=str, default='./data/NOCS', help='data directory')
     parser.add_argument('--results_folder', type=str, default='./results/NOCS', help='root path for saving results')
     # parser.add_argument('--temp_folder', type=str, default='../data/NOCS/template_FPS', help='root path for saving template')
