@@ -31,10 +31,10 @@ dataset : {
             others: {subset: 'test'}}}
             
 model : {
-    NAME: AdaPoinTr_Pose_concat_feature, 
+    NAME: AdaPoinTr_Pose_encoder_mlp, 
     # NEW
     cate_num: 6,
-    num_query: 512, 
+    num_query: 512, # 512, 
     num_points: 8192,
     center_num: [256, 128],
     global_feature_dim: 1024, 
@@ -64,9 +64,14 @@ model : {
       cross_attn_combine_style: 'concat',
     },
     pose_config: {
-      rotat_feature: 'rebuild_feature',
+      rotat_feature: 'rebuild',
       normalize_head: True,
-      rotate_loss_type: 'l1' # l1 geodesic
+      rotate_loss_type: 'l1', # l1 geodesic l2
+      size_loss_type: 'l1', # l1
+      trans_loss_type: 'l1', # l1
+    },
+    mlp_decoder_config: {
+      feature: 'rebuild_feature', # rebuild_feature global_feature
     }
 }
   

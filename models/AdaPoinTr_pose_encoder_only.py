@@ -761,9 +761,12 @@ class SimpleRebuildFCLayer(nn.Module):
         return rebuild_pc
 
 ######################################## PCTransformer ########################################   
-class PCTransformer(nn.Module):
+class PCTransformer_encoder(nn.Module):
     def __init__(self, config):
         super().__init__()
+        ## NEW: 提前引出global feature###
+        self.pre_global_feature = config.pre_global_feature
+        #################################
         encoder_config = config.encoder_config
         decoder_config = config.decoder_config
         self.center_num  = getattr(config, 'center_num', [512, 128])
@@ -853,49 +856,19 @@ class PCTransformer(nn.Module):
         coarse_inp = misc.fps(xyz, self.num_query//2) # B 128 3
         coarse = torch.cat([coarse, coarse_inp], dim=1) # B 224+128 3
 
-        mem = self.mem_link(x) # mem来自于encoder输出
+        # mem = self.mem_link(x) # mem来自于encoder输出
 
         # query selection
         query_ranking = self.query_ranking(coarse) # b n 1 # query ranking是什么？ 线性层+sigmoid
         idx = torch.argsort(query_ranking, dim=1, descending=True) # b n 1
-        coarse = torch.gather(coarse, 1, idx[:,:self.num_query].expand(-1, -1, coarse.size(-1)))
-
-        if self.training:
-            # add denoise task
-            # first pick some point : 64?
-            picked_points = misc.fps(xyz, 64)
-            picked_points = misc.jitter_points(picked_points)
-            coarse = torch.cat([coarse, picked_points], dim=1) # B 256+64 3?
-            denoise_length = 64     
-
-            # produce query
-            # TODO: 尝试将这一部分res出来
-            q = self.mlp_query(
-            torch.cat([
-                global_feature.unsqueeze(1).expand(-1, coarse.size(1), -1),
-                coarse], dim = -1)) # b n c 
-
-            # forward decoder
-            q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor, denoise_length=denoise_length)
-
-            return q, coarse, denoise_length
-
-        else:
-            # produce query
-            q = self.mlp_query(
-            torch.cat([
-                global_feature.unsqueeze(1).expand(-1, coarse.size(1), -1),
-                coarse], dim = -1)) # b n c
-            
-            # forward decoder
-            q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor)
-
-            return q, coarse, 0
+        coarse = torch.gather(coarse, 1, idx[:,:self.num_query].expand(-1, -1, coarse.size(-1))) # [48, 512, 3]
+        
+        return coarse, global_feature
 
 ######################################## PoinTr ########################################  
 
 @MODELS.register_module()
-class AdaPoinTr_Pose(nn.Module):
+class AdaPoinTr_Pose_encoder_only(nn.Module):
     def __init__(self, config, **kwargs):
         super().__init__()
         
@@ -904,6 +877,8 @@ class AdaPoinTr_Pose(nn.Module):
         
         # NEW: 得到rotate loss计算方式
         self.rotate_loss_type = config.pose_config.rotate_loss_type
+        self.trans_loss_type = config.pose_config.trans_loss_type
+        self.size_loss_type = config.pose_config.size_loss_type
         
         # TODO: 设计如何对应mapping
         self.mapping = {
@@ -923,7 +898,7 @@ class AdaPoinTr_Pose(nn.Module):
         assert self.decoder_type in ['fold', 'fc'], f'unexpected decoder_type {self.decoder_type}'
 
         self.fold_step = 8
-        self.base_model = PCTransformer(config)
+        self.base_model = PCTransformer_encoder(config)
         
         if self.decoder_type == 'fold':
             self.factor = self.fold_step**2
@@ -936,6 +911,7 @@ class AdaPoinTr_Pose(nn.Module):
             else:
                 self.factor = self.fold_step**2
                 self.decode_head = SimpleRebuildFCLayer(self.trans_dim * 2, step=self.fold_step**2)
+                
         self.increase_dim = nn.Sequential(
             nn.Conv1d(self.trans_dim, 1024, 1),
             nn.BatchNorm1d(1024),
@@ -1007,6 +983,7 @@ class AdaPoinTr_Pose(nn.Module):
                 nn.GELU(),
                 nn.Linear(256, 6*self.cate_num),
             )
+
             
             self.trans_head = nn.Sequential(
                 nn.Linear(1024, 512),
@@ -1030,28 +1007,15 @@ class AdaPoinTr_Pose(nn.Module):
 
     def get_loss(self, ret, gt, gt_taxonomys, gt_rotat_mat, gt_trans_mat, gt_size_mat, epoch=1):
         
-        pred_coarse, denoised_coarse, denoised_fine, pred_fine, pred_rotat_mat, pred_trans_mat, pred_size_mat = ret
+        # pred_coarse, denoised_coarse, denoised_fine, pred_fine, pred_rotat_mat, pred_trans_mat, pred_size_mat = ret
+        pred_coarse, pred_rotat_mat, pred_trans_mat, pred_size_mat = ret
         # import ipdb; ipdb.set_trace()
-        
-        assert pred_fine.size(1) == gt.size(1)
-
-        # denoise loss
-        idx = knn_point(self.factor, gt, denoised_coarse) # B n k 
-        denoised_target = index_points(gt, idx) # B n k 3 
-        denoised_target = denoised_target.reshape(gt.size(0), -1, 3)
-        assert denoised_target.size(1) == denoised_fine.size(1)
-        loss_denoised = self.loss_func(denoised_fine, denoised_target)
-        loss_denoised = loss_denoised * 0.5
 
         # recon loss
         loss_coarse = self.loss_func(pred_coarse, gt)
-        loss_fine = self.loss_func(pred_fine, gt)
-        loss_recon = loss_coarse + loss_fine
+        loss_recon = loss_coarse
         
         # pose loss
-        # loss_rotat = nn.SmoothL1Loss()(pred_rotat_mat, gt_rotat_mat)
-        # 做个修改，这里rotate_mat 变成（12， 6）了 先匹配loss最小的再返回那个loss
-        
         # TODO: 检查正确性
         gt_cate_ids = torch.tensor([self.mapping[tax] for tax in gt_taxonomys]).cuda()
         index = gt_cate_ids.squeeze() + torch.arange(gt.shape[0], dtype=torch.long).cuda() * self.cate_num
@@ -1066,13 +1030,19 @@ class AdaPoinTr_Pose(nn.Module):
         if self.rotate_loss_type == 'l1':
             loss_fn =nn.SmoothL1Loss()
             for gt_mat_list_6d, pred_mat_6d in zip(gt_rotat_mat, pred_rotat_mat):
-                import ipdb; ipdb.set_trace()
                 losses = torch.tensor([loss_fn(pred_mat_6d, gt_mat) for gt_mat in gt_mat_list_6d])
                 idx = torch.argmin(losses)
                 minloss_gt_rotat_mat_list.append(gt_mat_list_6d[idx])
 
             minloss_gt_rotat_mat_stack = torch.stack(minloss_gt_rotat_mat_list)
+        elif self.rotate_loss_type == 'l2':
+            loss_fn = nn.MSELoss()
+            for gt_mat_list_6d, pred_mat_6d in zip(gt_rotat_mat, pred_rotat_mat):
+                losses = torch.tensor([loss_fn(pred_mat_6d, gt_mat) for gt_mat in gt_mat_list_6d])
+                idx = torch.argmin(losses)
+                minloss_gt_rotat_mat_list.append(gt_mat_list_6d[idx])
 
+            minloss_gt_rotat_mat_stack = torch.stack(minloss_gt_rotat_mat_list)
         elif self.rotate_loss_type == 'geodesic':
             loss_fn = geodesic_rotation_error
             for gt_mat_list_6d, pred_mat_6d in zip(gt_rotat_mat, pred_rotat_mat):
@@ -1086,78 +1056,35 @@ class AdaPoinTr_Pose(nn.Module):
             
         if self.rotate_loss_type == 'l1':
             loss_rotat = nn.SmoothL1Loss()(minloss_gt_rotat_mat_stack, pred_rotat_mat)
+        elif self.rotate_loss_type == 'l2':
+            loss_rotat = nn.MSELoss()(minloss_gt_rotat_mat_stack, pred_rotat_mat)
         elif self.rotate_loss_type == 'geodesic':
             r1, r2 = convert_rotation.compute_rotation_matrix_from_ortho6d(minloss_gt_rotat_mat_stack), convert_rotation.compute_rotation_matrix_from_ortho6d(pred_rotat_mat) 
             loss_rotat, loss_rotat_all = geodesic_rotation_error(r1, r2)
-        loss_trans = nn.SmoothL1Loss()(pred_trans_mat, gt_trans_mat)
-        loss_size = nn.SmoothL1Loss()(pred_size_mat, gt_size_mat)
+        
+        if self.rotate_loss_type == 'l1':
+            loss_trans = nn.SmoothL1Loss()(pred_trans_mat, gt_trans_mat)
+        elif self.rotate_loss_type == 'l2':
+            loss_trans = nn.MSELoss()(pred_trans_mat, gt_trans_mat)
 
-        return loss_denoised, loss_recon, loss_rotat, loss_trans, loss_size
+        if self.rotate_loss_type == 'l1':
+            loss_size = nn.SmoothL1Loss()(pred_size_mat, gt_size_mat)
+        elif self.rotate_loss_type == 'l2':
+            loss_size = nn.MSELoss()(pred_size_mat, gt_size_mat)
+
+        return loss_recon, loss_rotat, loss_trans, loss_size
 
     def forward(self, xyz):
-        q, coarse_point_cloud, denoise_length = self.base_model(xyz) # B M C and B M 3
+        coarse_point_cloud, global_feature = self.base_model(xyz) # B M C and B M 3
     
-        B, M ,C = q.shape
-
-        global_feature = self.increase_dim(q.transpose(1,2)).transpose(1,2) # B M 1024
-        global_feature = torch.max(global_feature, dim=1)[0] # B 1024
-
-        rebuild_feature = torch.cat([
-            global_feature.unsqueeze(-2).expand(-1, M, -1),
-            q,
-            coarse_point_cloud], dim=-1)  # B M 1027 + C
-
-        # ############ 添加rotation的预测 ############ 
-        # if self.rotat_feature == "rebuild_feature":
-        #     rotation_matrix = self.rotat_mat(rebuild_feature)
-        # elif self.rotat_feature == "global_feature":
-        #     rotation_matrix = self.rotat_mat(global_feature)
-            
-        # # 对rotation_matrix进行正则化
-        # if self.rotate_norm:
-        #     norm = torch.linalg.norm(rotation_matrix, dim=1, keepdim=True) + 1e-10
-        #     rotation_matrix = rotation_matrix / norm
-        # ###########################################
+        # B, M ,C = q.shape
         
         ############# 添加分支预测 rotate trans size ############
-        
         rotation_mat = self.rotat_head(global_feature)
         trans_mat = self.trans_head(global_feature)
         size_mat = self.size_head(global_feature)
         
         ########################################################
-        
-        # NOTE: foldingNet
-        if self.decoder_type == 'fold':
-            rebuild_feature = self.reduce_map(rebuild_feature.reshape(B*M, -1)) # BM C
-            relative_xyz = self.decode_head(rebuild_feature).reshape(B, M, 3, -1)    # B M 3 S
-            rebuild_points = (relative_xyz + coarse_point_cloud.unsqueeze(-1)).transpose(2,3)  # B M S 3
 
-        else:
-            rebuild_feature = self.reduce_map(rebuild_feature) # B M C
-            relative_xyz = self.decode_head(rebuild_feature)   # B M S 3
-            rebuild_points = (relative_xyz + coarse_point_cloud.unsqueeze(-2))  # B M S 3
-
-        if self.training:
-            # split the reconstruction and denoise task
-            pred_fine = rebuild_points[:, :-denoise_length].reshape(B, -1, 3).contiguous()
-            pred_coarse = coarse_point_cloud[:, :-denoise_length].contiguous()
-
-            denoised_fine = rebuild_points[:, -denoise_length:].reshape(B, -1, 3).contiguous()
-            denoised_coarse = coarse_point_cloud[:, -denoise_length:].contiguous()
-
-            assert pred_fine.size(1) == self.num_query * self.factor
-            assert pred_coarse.size(1) == self.num_query
-
-            ret = (pred_coarse, denoised_coarse, denoised_fine, pred_fine, rotation_mat, trans_mat, size_mat)
-            return ret
-
-        else:
-            assert denoise_length == 0
-            rebuild_points = rebuild_points.reshape(B, -1, 3).contiguous()  # B N 3
-
-            assert rebuild_points.size(1) == self.num_query * self.factor
-            assert coarse_point_cloud.size(1) == self.num_query
-
-            ret = (coarse_point_cloud, rebuild_points, rotation_mat, trans_mat, size_mat)
-            return ret
+        ret = (coarse_point_cloud, rotation_mat, trans_mat, size_mat)
+        return ret

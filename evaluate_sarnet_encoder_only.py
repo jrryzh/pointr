@@ -252,13 +252,12 @@ def estimate():
             
             ret = base_model(input_pcd_tensor)
             coarse_points = ret[0]
-            dense_points = ret[1]
-            pred_rotat_mat = ret[2]
-            pred_trans_mat = ret[3]
-            pred_size_mat = ret[4]
+            pred_rotat_mat = ret[1]
+            pred_trans_mat = ret[2]
+            pred_size_mat = ret[3]
             
             coarse_points_np = coarse_points.cpu().detach().numpy().squeeze()
-            dense_points_np = dense_points.cpu().detach().numpy().squeeze()
+            # dense_points_np = dense_points.cpu().detach().numpy().squeeze()
             if opt.pcd_isSave:
                 print('保存点云到', save_folder)
                 scene_id = path.split('/')[-2].split('_')[-1]
@@ -466,7 +465,7 @@ if __name__ == "__main__":
     parser.add_argument('--GCN3D_model_path', type=str, default='./ckpts/20210530_5.pth', help='model path of 3DGCN')
     
     opt = parser.parse_args()
-    opt.experiment_path = os.path.join('./experiments', 'AdaPoinTr_Pose_concat_feature', 'SapienPartial_ShapeNet55_models', opt.exp_name)
+    opt.experiment_path = os.path.join('./experiments', 'AdaPoinTr_Pose_encoder_only', 'SapienPartial_ShapeNet55_models', opt.exp_name)
     opt.config = os.path.join(opt.experiment_path, 'config.yaml')
     opt.ckpts = os.path.join(opt.experiment_path, 'ckpt-last.pth')
     # model_args = model_parser.get_args()

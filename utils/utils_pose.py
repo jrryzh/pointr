@@ -1008,10 +1008,11 @@ def draw_detections(img, out_dir, data_name, img_id, intrinsics, pred_sRT, pred_
     
     # darw prediction - RED color
     for i in range(pred_sRT.shape[0]):
-        if pred_class_ids[i] in [1, 2, 4]:
-            sRT = align_rotation(pred_sRT[i, :, :])
-        else:
-            sRT = pred_sRT[i, :, :]
+        # if pred_class_ids[i] in [1, 2, 4]:
+        #     sRT = align_rotation(pred_sRT[i, :, :])
+        # else:
+        #     sRT = pred_sRT[i, :, :]
+        sRT = pred_sRT[i, :, :]
         bbox_3d = get_3d_bbox(pred_size[i, :], 0)
         transformed_bbox_3d = transform_coordinates_3d(bbox_3d, sRT)
         projected_bbox = calculate_2d_projections(transformed_bbox_3d, intrinsics)
