@@ -157,7 +157,7 @@ tests/input/
 tests/output/
 
 results/
-data/SapienRendered/*
+data/SapienRendered/
 experiments
 data/SapienRendered
 data/SapienRendered_objs
