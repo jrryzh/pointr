@@ -14,6 +14,7 @@ from utils import misc
 from utils.utils_pose import geodesic_rotation_error
 from utils import convert_rotation
 
+from utils.commons import categories_with_labels
 
 class SelfAttnBlockApi(nn.Module):
     r'''
@@ -914,14 +915,16 @@ class AdaPoinTr_Pose_concat_feature(nn.Module):
         self.rotate_loss_type = config.pose_config.rotate_loss_type
         
         # TODO: 设计如何对应mapping
-        self.mapping = {
-            '02876657': 0,
-            '02880940': 1,
-            '02942699': 2,
-            '02946921': 3,
-            '03642806': 4,
-            '03797390': 5
-        }
+        # self.mapping = {
+        #     '02876657': 0,
+        #     '02880940': 1,
+        #     '02942699': 2,
+        #     '02946921': 3,
+        #     '03642806': 4,
+        #     '03797390': 5
+        # }
+        self.mapping = categories_with_labels
+        
         
         self.trans_dim = config.decoder_config.embed_dim
         self.num_query = config.num_query

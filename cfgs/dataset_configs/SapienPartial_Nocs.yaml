@@ -1,9 +1,9 @@
-NAME: SapienPartial_ShapeNet
+NAME: SapienPartial_Nocs
 # DATA_PATH: /home/fudan248/zhangjinyu/code_repo/PoinTr/data/SapienRendered
 # OBJ_PATH: /home/fudan248/zhangjinyu/code_repo/PoinTr/data/ShapeNet55-34/shapenet_pc/
 DATA_PATH: ./data/SapienRendered
 OBJ_PATH: ./data/SapienRendered_objs
-CATE_NUM: 55
+CATE_NUM: 6
 
 GAUSSIAN_NOISE: True
 N_POINTS: 8192

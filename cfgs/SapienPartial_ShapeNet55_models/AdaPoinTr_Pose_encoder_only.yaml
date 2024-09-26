@@ -33,7 +33,7 @@ dataset : {
 model : {
     NAME: AdaPoinTr_Pose_encoder_only, 
     # NEW
-    cate_num: 6,
+    cate_num: 55,
     num_query: 512, # 512, 
     num_points: 8192,
     center_num: [256, 128],

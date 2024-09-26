@@ -369,7 +369,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
                 dense_loss_l1 =  ChamferDisL1(dense_points, gt)
                 dense_loss_l2 =  ChamferDisL2(dense_points, gt)
                 
-            if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp":
+            if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp" or config.model.NAME == "AdaPoinTr_Pose_encoder_only":
                 pred_rotat_mat = ret[-3]
                 pred_trans_mat = ret[-2]
                 pred_size_mat = ret[-1]
@@ -471,7 +471,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
                     sparse_loss_l2 = dist_utils.reduce_tensor(sparse_loss_l2, args)
                     dense_loss_l1 = dist_utils.reduce_tensor(dense_loss_l1, args)
                     dense_loss_l2 = dist_utils.reduce_tensor(dense_loss_l2, args)
-                if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp":
+                if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp" or config.model.NAME == "AdaPoinTr_Pose_encoder_only":
                     ############### pose matrix loss ################
                     rotat_loss = dist_utils.reduce_tensor(rotat_loss, args)
                     trans_loss = dist_utils.reduce_tensor(trans_loss, args)
