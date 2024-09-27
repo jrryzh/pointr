@@ -379,7 +379,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
                 dense_loss_l2 =  ChamferDisL2(dense_points, gt)
                 
             # if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp" or config.model.NAME == "AdaPoinTr_Pose_encoder_only":
-            if config.model.NAME in ["AdaPoinTr_Pose", "AdaPoinTr_Pose_concat_feature", "AdaPoinTr_Pose_encoder_mlp", "AdaPoinTr_Pose_concat_2feature"]:
+            if config.model.NAME in ["AdaPoinTr_Pose", "AdaPoinTr_Pose_concat_feature", "AdaPoinTr_Pose_encoder_mlp", "AdaPoinTr_Pose_concat_2feature", "AdaPoinTr_Pose_encoder_only"]:
                 pred_rotat_mat = ret[-3]
                 pred_trans_mat = ret[-2]
                 pred_size_mat = ret[-1]
@@ -482,7 +482,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
                     dense_loss_l1 = dist_utils.reduce_tensor(dense_loss_l1, args)
                     dense_loss_l2 = dist_utils.reduce_tensor(dense_loss_l2, args)
                 # if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp" or config.model.NAME == "AdaPoinTr_Pose_encoder_only":
-                if config.model.NAME in ["AdaPoinTr_Pose", "AdaPoinTr_Pose_concat_feature", "AdaPoinTr_Pose_encoder_mlp", "AdaPoinTr_Pose_concat_2feature"]:
+                if config.model.NAME in ["AdaPoinTr_Pose", "AdaPoinTr_Pose_concat_feature", "AdaPoinTr_Pose_encoder_mlp", "AdaPoinTr_Pose_concat_2feature", "AdaPoinTr_Pose_encoder_only"]:
                     ############### pose matrix loss ################
                     rotat_loss = dist_utils.reduce_tensor(rotat_loss, args)
                     trans_loss = dist_utils.reduce_tensor(trans_loss, args)
@@ -641,7 +641,10 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
 
     base_model.eval()  # set model to eval mode
 
-    test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2', 'RotatLoss', 'TransLoss', 'SizeLoss'])
+    if config.model.NAME == "AdaPoinTr_Pose_encoder_only":
+        test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'RotatLoss', 'TransLoss', 'SizeLoss'])
+    else:
+        test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2', 'RotatLoss', 'TransLoss', 'SizeLoss'])
     test_metrics = AverageMeter(Metrics.names())
     category_metrics = dict()
     n_samples = len(test_dataloader) # bs is 1
@@ -723,11 +726,6 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 gt_size_mat = data[4].cuda()
                 
                 ret = base_model(partial)
-                coarse_points = ret[0]
-                dense_points = ret[1]
-                pred_rotat_mat = ret[2]
-                pred_trans_mat = ret[3]
-                pred_size_mat = ret[4]
                 
                 gt_centroid = data[5]
                 gt_scale = data[6]
@@ -735,14 +733,31 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 gt_cam_complete_pcs = data[8].cuda()
                 gt_canonical_pcs = data[9].cuda()
                 rgb_path = data[10][0]
-
-                sparse_loss_l1 =  ChamferDisL1(coarse_points, gt)
-                sparse_loss_l2 =  ChamferDisL2(coarse_points, gt)
-                dense_loss_l1 =  ChamferDisL1(dense_points, gt)
-                dense_loss_l2 =  ChamferDisL2(dense_points, gt)
+                
+                
+                # coarse_points = ret[0]
+                # dense_points = ret[1]
+                # pred_rotat_mat = ret[2]
+                # pred_trans_mat = ret[3]
+                # pred_size_mat = ret[4]
+                if config.model.NAME == "AdaPoinTr_Pose_encoder_only":
+                    coarse_points = ret[0]
+                    sparse_loss_l1 =  ChamferDisL1(coarse_points, gt)
+                    sparse_loss_l2 =  ChamferDisL2(coarse_points, gt)
+                else:
+                    coarse_points = ret[0]
+                    dense_points = ret[1]
+                
+                    sparse_loss_l1 =  ChamferDisL1(coarse_points, gt)
+                    sparse_loss_l2 =  ChamferDisL2(coarse_points, gt)
+                    dense_loss_l1 =  ChamferDisL1(dense_points, gt)
+                    dense_loss_l2 =  ChamferDisL2(dense_points, gt)
 
                 ############### pose matrix loss ################
                 # import ipdb; ipdb.set_trace()
+                pred_rotat_mat = ret[-3]
+                pred_trans_mat = ret[-2]
+                pred_size_mat = ret[-1]
                 gt_cate_ids = torch.tensor([mapping[tax] for tax in taxonomy_ids]).cuda()
                 index = gt_cate_ids.squeeze() + torch.arange(gt.shape[0], dtype=torch.long).cuda() * cate_num
                 pred_trans_mat = pred_trans_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
@@ -752,7 +767,6 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 pred_rotat_mat = pred_rotat_mat.view(-1, 6).contiguous() # bs, 6*nc -> bs*nc, 6
                 pred_rotat_mat = torch.index_select(pred_rotat_mat, 0, index).contiguous()  # bs x 6
 
-                
                 loss_fn = nn.SmoothL1Loss()
                 # print('pred_rotat_mat[0].shape,', pred_rotat_mat[0].shape)
                 # print('gt_rotate_mat[0].shape,', gt_rotate_mat[0].shape)
@@ -768,11 +782,17 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 # size_loss = dist_utils.reduce_tensor(size_loss, args)
                 ##################################################
                 
-                if config.model.NAME == "AdaPoinTr_Pose":
-                    test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000, rotat_loss.item() * 1000, trans_loss.item() * 1000, size_loss.item() * 1000])
-                else:
+                if config.model.NAME == "AdaPoinTr_Pose_encoder_only":
                     test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000])
+                else:
+                    test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000, rotat_loss.item() * 1000, trans_loss.item() * 1000, size_loss.item() * 1000])
                 
+                # 由于输出的点可能维度比8192小，需要对gt下采样
+                if config.model.NAME == "AdaPoinTr_Pose_encoder_mlp" and dense_points.shape[1] < 8192:
+                    batch_size, num_gt, dim = gt.shape
+                    num_sampled = dense_points.shape[1]
+                    indices = torch.randperm(num_gt, device=gt.device)[:num_sampled]
+                    gt = gt[:, indices, :]
                 _metrics = Metrics.get(dense_points, gt, require_emd=True)
                 # test_metrics.update(_metrics)
 
@@ -810,7 +830,7 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 scale_np = gt_scale.cpu().detach().numpy().squeeze()
                 # sample from 10518
 
-                intrinsics = np.loadtxt('./data/SapienRendered/bottle/1cf98e5b6fff5471c8724d5673a063a6/intrinsic.txt')
+                intrinsics = np.loadtxt('./data/SapienRendered/sapien_output/bottle/1cf98e5b6fff5471c8724d5673a063a6/intrinsic.txt')
                 img = cv2.imread(rgb_path)
                 pred_sRT = np.identity(4, dtype=float)
                 pred_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(pred_rotat_mat_np)
@@ -827,18 +847,18 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
                 
                 ############### GT ####################
                 # import ipdb; ipdb.set_trace()
-                # gt_size_mat_np = gt_size_mat.cpu().detach().numpy().squeeze()
-                # gt_rotate_mat_np = gt_rotate_mat.cpu().detach().numpy().squeeze()
-                # gt_trans_mat_np = gt_trans_mat.cpu().detach().numpy().squeeze()
-                # gt_sRT = np.identity(4, dtype=float)
-                # gt_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(gt_rotate_mat_np[0])
-                # gt_sRT[0, 3] = gt_trans_mat_np[0]* scale_np + centroid_np[0]
-                # gt_sRT[1, 3] = gt_trans_mat_np[1]* scale_np + centroid_np[1]
-                # gt_sRT[2, 3] = gt_trans_mat_np[2]* scale_np + centroid_np[2]
-                # f_sRT = scale_np * gt_size_mat_np
+                gt_size_mat_np = gt_size_mat.cpu().detach().numpy().squeeze()
+                gt_rotate_mat_np = gt_rotate_mat.cpu().detach().numpy().squeeze()
+                gt_trans_mat_np = gt_trans_mat.cpu().detach().numpy().squeeze()
+                gt_sRT = np.identity(4, dtype=float)
+                gt_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(gt_rotate_mat_np[0])
+                gt_sRT[0, 3] = gt_trans_mat_np[0]* scale_np + centroid_np[0]
+                gt_sRT[1, 3] = gt_trans_mat_np[1]* scale_np + centroid_np[1]
+                gt_sRT[2, 3] = gt_trans_mat_np[2]* scale_np + centroid_np[2]
+                f_sRT = scale_np * gt_size_mat_np
                 
                 
-                # draw_detections(_img, os.path.join(args.experiment_path, 'img_out'), 'train_data', f'{idx:04}_gt', intrinsics, np.expand_dims((gt_sRT), 0), np.expand_dims(f_sRT, 0), [-1]) # np.expand_dims((pred_sRT), 0), np.expand_dims(f_sRT, 0)
+                draw_detections(_img, os.path.join(args.experiment_path, 'img_out'), 'train_data', f'{idx:04}_gt', intrinsics, np.expand_dims((gt_sRT), 0), np.expand_dims(f_sRT, 0), [-1]) # np.expand_dims((pred_sRT), 0), np.expand_dims(f_sRT, 0)
                 #######################################
                 
                 

@@ -34,6 +34,7 @@ bash ./scripts/train.sh 4 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoi
 
 # mlp
 bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp.yaml --exp_name shapenet55_v0
+bash ./scripts/test.sh 0 --ckpts experiments/AdaPoinTr_Pose_encoder_mlp/SapienPartial_ShapeNet55_models/shapenet55_v0/ckpt-last.pth --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp.yaml --exp_name shapenet55_v0
 
 # encoder only
 bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_only.yaml --exp_name shapenet55_v0
