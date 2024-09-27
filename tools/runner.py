@@ -14,6 +14,8 @@ import cv2
 import numpy as np
 from utils import convert_rotation
 
+from utils.commons import categories_with_labels
+
 import json
 shapenet_dict = json.load(open('./data/shapenet_synset_dict.json', 'r'))
 
@@ -94,7 +96,8 @@ def run_net(args, config, train_writer=None, val_writer=None):
         
         if config.model.NAME == "AdaPoinTr_Pose_CAMLOSS":
             losses = AverageMeter(['SparseLoss', 'DenseLoss', 'RotatLoss', 'TransLoss', 'SizeLoss', 'CamLoss'])
-        elif config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp":
+        # elif config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp":
+        elif config.model.NAME in ["AdaPoinTr_Pose", "AdaPoinTr_Pose_concat_feature", "AdaPoinTr_Pose_encoder_mlp", "AdaPoinTr_Pose_concat_2feature"]:
             losses = AverageMeter(['SparseLoss', 'DenseLoss', 'RotatLoss', 'TransLoss', 'SizeLoss'])
         elif config.model.NAME == "AdaPoinTr_Pose_encoder_only":
             losses = AverageMeter(['SparseLoss', 'RotatLoss', 'TransLoss', 'SizeLoss'])
@@ -148,7 +151,8 @@ def run_net(args, config, train_writer=None, val_writer=None):
            
             ret = base_model(partial)
             
-            if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp": # base_model.__name__
+            # if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp": # base_model.__name__
+            if config.model.NAME in ["AdaPoinTr_Pose", "AdaPoinTr_Pose_concat_feature", "AdaPoinTr_Pose_encoder_mlp", "AdaPoinTr_Pose_concat_2feature"]: # base_model.__name__
                 sparse_loss, dense_loss, rotat_loss, trans_loss, size_loss = base_model.module.get_loss(ret, gt, taxonomy_ids, gt_rotate_mat, gt_trans_mat, gt_size_mat, epoch)
                 
                 _loss = sparse_loss + dense_loss + rotat_loss + trans_loss + size_loss
@@ -177,7 +181,8 @@ def run_net(args, config, train_writer=None, val_writer=None):
                 optimizer.step()
                 base_model.zero_grad()
 
-            if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp":
+            # if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp":
+            if config.model.NAME in ["AdaPoinTr_Pose", "AdaPoinTr_Pose_concat_feature", "AdaPoinTr_Pose_encoder_mlp", "AdaPoinTr_Pose_concat_2feature"]:
                 if args.distributed:
                     sparse_loss = dist_utils.reduce_tensor(sparse_loss, args)
                     dense_loss = dist_utils.reduce_tensor(dense_loss, args)
@@ -231,7 +236,8 @@ def run_net(args, config, train_writer=None, val_writer=None):
                 else:
                     train_writer.add_scalar('Loss/Batch/Sparse', sparse_loss.item() * 1000, n_itr)
                     train_writer.add_scalar('Loss/Batch/Dense', dense_loss.item() * 1000, n_itr)
-                    if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp":
+                    # if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp":
+                    if config.model.NAME in ["AdaPoinTr_Pose", "AdaPoinTr_Pose_concat_feature", "AdaPoinTr_Pose_encoder_mlp", "AdaPoinTr_Pose_concat_2feature"]:
                         train_writer.add_scalar('Loss/Batch/Rotate', rotat_loss.item() * 1000,  n_itr)
                         train_writer.add_scalar('Loss/Batch/Trans', trans_loss.item() * 1000,  n_itr)
                         train_writer.add_scalar('Loss/Batch/Size', size_loss.item() * 1000,  n_itr)
@@ -269,7 +275,8 @@ def run_net(args, config, train_writer=None, val_writer=None):
             else:
                 train_writer.add_scalar('Loss/Epoch/Sparse', losses.avg(0), epoch)
                 train_writer.add_scalar('Loss/Epoch/Dense', losses.avg(1), epoch)
-                if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp":
+                # if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp":
+                if config.model.NAME in ["AdaPoinTr_Pose", "AdaPoinTr_Pose_concat_feature", "AdaPoinTr_Pose_encoder_mlp", "AdaPoinTr_Pose_concat_2feature"]:
                     train_writer.add_scalar('Loss/Epoch/Rotate', losses.avg(2), epoch)
                     train_writer.add_scalar('Loss/Epoch/Trans', losses.avg(3), epoch)
                     train_writer.add_scalar('Loss/Epoch/Size', losses.avg(4), epoch)
@@ -298,14 +305,15 @@ def run_net(args, config, train_writer=None, val_writer=None):
 
 def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val_writer, args, config, logger = None):
     # TODO: 更好的添加mapping
-    mapping = {
-        '02876657': 0,
-        '02880940': 1,
-        '02942699': 2,
-        '02946921': 3,
-        '03642806': 4,
-        '03797390': 5
-        }
+    # mapping = {
+    #     '02876657': 0,
+    #     '02880940': 1,
+    #     '02942699': 2,
+    #     '02946921': 3,
+    #     '03642806': 4,
+    #     '03797390': 5
+    #     }
+    mapping = categories_with_labels
     cate_num = len(mapping)
     
     print_log(f"[VALIDATION] Start validating epoch {epoch}", logger = logger)
@@ -313,7 +321,8 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
 
     if config.model.NAME == "AdaPoinTr_Pose_CAMLOSS":
         test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2', 'RotatLoss', 'TransLoss', 'SizeLoss', 'CamLoss'])
-    elif config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp":
+    # elif config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp":
+    if config.model.NAME in ["AdaPoinTr_Pose", "AdaPoinTr_Pose_concat_feature", "AdaPoinTr_Pose_encoder_mlp", "AdaPoinTr_Pose_concat_2feature"]:
         test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2', 'RotatLoss', 'TransLoss', 'SizeLoss'])
     elif config.model.NAME == "AdaPoinTr_Pose_encoder_only":
         test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'RotatLoss', 'TransLoss', 'SizeLoss'])
@@ -369,7 +378,8 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
                 dense_loss_l1 =  ChamferDisL1(dense_points, gt)
                 dense_loss_l2 =  ChamferDisL2(dense_points, gt)
                 
-            if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp" or config.model.NAME == "AdaPoinTr_Pose_encoder_only":
+            # if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp" or config.model.NAME == "AdaPoinTr_Pose_encoder_only":
+            if config.model.NAME in ["AdaPoinTr_Pose", "AdaPoinTr_Pose_concat_feature", "AdaPoinTr_Pose_encoder_mlp", "AdaPoinTr_Pose_concat_2feature"]:
                 pred_rotat_mat = ret[-3]
                 pred_trans_mat = ret[-2]
                 pred_size_mat = ret[-1]
@@ -471,7 +481,8 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
                     sparse_loss_l2 = dist_utils.reduce_tensor(sparse_loss_l2, args)
                     dense_loss_l1 = dist_utils.reduce_tensor(dense_loss_l1, args)
                     dense_loss_l2 = dist_utils.reduce_tensor(dense_loss_l2, args)
-                if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp" or config.model.NAME == "AdaPoinTr_Pose_encoder_only":
+                # if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp" or config.model.NAME == "AdaPoinTr_Pose_encoder_only":
+                if config.model.NAME in ["AdaPoinTr_Pose", "AdaPoinTr_Pose_concat_feature", "AdaPoinTr_Pose_encoder_mlp", "AdaPoinTr_Pose_concat_2feature"]:
                     ############### pose matrix loss ################
                     rotat_loss = dist_utils.reduce_tensor(rotat_loss, args)
                     trans_loss = dist_utils.reduce_tensor(trans_loss, args)
@@ -485,7 +496,8 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
                     cam_loss = dist_utils.reduce_tensor(cam_loss, args)
                     
                 
-            if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp":
+            # if config.model.NAME == "AdaPoinTr_Pose" or config.model.NAME == "AdaPoinTr_Pose_concat_feature" or config.model.NAME == "AdaPoinTr_Pose_encoder_mlp":
+            if config.model.NAME in ["AdaPoinTr_Pose", "AdaPoinTr_Pose_concat_feature", "AdaPoinTr_Pose_encoder_mlp", "AdaPoinTr_Pose_concat_2feature"]:
                 test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000, rotat_loss.item() * 1000, trans_loss.item() * 1000, size_loss.item() * 1000])
             elif config.model.NAME == "AdaPoinTr_Pose_encoder_only":
                 test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, rotat_loss.item() * 1000, trans_loss.item() * 1000, size_loss.item() * 1000])
@@ -616,14 +628,15 @@ def test_net(args, config):
 
 def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, logger = None):
     # TODO: 更好的添加mapping
-    mapping = {
-        '02876657': 0,
-        '02880940': 1,
-        '02942699': 2,
-        '02946921': 3,
-        '03642806': 4,
-        '03797390': 5
-        }
+    # mapping = {
+    #     '02876657': 0,
+    #     '02880940': 1,
+    #     '02942699': 2,
+    #     '02946921': 3,
+    #     '03642806': 4,
+    #     '03797390': 5
+    #     }
+    mapping = categories_with_labels
     cate_num = len(mapping)
 
     base_model.eval()  # set model to eval mode
@@ -772,7 +785,7 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
 
             ################## NOTE: DEBUG SAVE PC ####################
             # if (idx+1) % 200 == 0:
-            if True:
+            if False:
                 print_log('Test[%d/%d] Taxonomy = %s Sample = %s Losses = %s Metrics = %s' %
                             (idx + 1, n_samples, taxonomy_id, model_id, ['%.4f' % l for l in test_losses.val()], 
                             ['%.4f' % m for m in _metrics]), logger=logger)

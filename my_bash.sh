@@ -29,6 +29,9 @@ bash ./scripts/test.sh 0 --ckpts ./experiments/AdaPoinTr/PartialSpace_ShapeNet55
 # concat feature 
 bash ./scripts/train.sh 4 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_concat_feature.yaml --exp_name shapenet55_v0
 
+# concat 2feature
+bash ./scripts/train.sh 4 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_concat_2feature.yaml --exp_name testcode
+
 # mlp
 bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp.yaml --exp_name shapenet55_v0
 
