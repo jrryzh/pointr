@@ -95,7 +95,7 @@ class SapienPartial_ShapeNet(data.Dataset):
         self.cate_num = config.CATE_NUM
         # self.data_list_file = os.path.join(self.data_root, f'{self.subset}.txt')
         if self.subset == 'train':
-            self.data_list_file = os.path.join(self.data_root, f'500view_shapenet_train_list.txt')
+            self.data_list_file = os.path.join(self.data_root, f'500view_shapenet_first50_train_list.txt')
         elif self.subset == 'val' or self.subset == 'test':
             self.data_list_file = os.path.join(self.data_root, f'500view_shapenet_test_list.txt')
         # self.data_list_file = os.path.join(self.data_root, f'500view_shapenet_train_list.txt')
