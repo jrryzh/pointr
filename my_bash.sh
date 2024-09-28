@@ -32,9 +32,14 @@ bash ./scripts/train.sh 4 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoi
 # concat 2feature
 bash ./scripts/train.sh 4 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_concat_2feature.yaml --exp_name shapenet55_v0
 
+bash ./scripts/train.sh 7 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_concat_2feature.yaml --exp_name shapenet55_mostfrequent50
+
+
 # mlp
 bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp.yaml --exp_name shapenet55_v0
 bash ./scripts/test.sh 0 --ckpts experiments/AdaPoinTr_Pose_encoder_mlp/SapienPartial_ShapeNet55_models/shapenet55_v0/ckpt-last.pth --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp.yaml --exp_name shapenet55_v0
+
+bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp.yaml --exp_name shapenet55_mostfrequent50
 
 # encoder only
 bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_only.yaml --exp_name shapenet55_v0

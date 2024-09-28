@@ -821,7 +821,7 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
             ################## NOTE: DEBUG SAVE DETECTION IMG ####################
             # if (idx+1) % 2333 == 0:
             if True:
-                print('save new obj...')
+                print('save new figs...')
                 ########### Preditction ############
                 pred_size_mat_np = pred_size_mat.cpu().detach().numpy().squeeze()
                 pred_rotat_mat_np = pred_rotat_mat.cpu().detach().numpy().squeeze()

@@ -1004,7 +1004,7 @@ def _draw_detections(img, out_dir, data_name, img_id, intrinsics, pred_sRT, pred
 def draw_detections(img, out_dir, data_name, img_id, intrinsics, pred_sRT, pred_size, pred_class_ids):
     """ Visualize pose predictions.
     """
-    out_path = os.path.join(out_dir, '{}_{}_pred.png'.format(data_name, img_id))
+    out_path = os.path.join(out_dir, '{}_{}.png'.format(data_name, img_id))
     
     # darw prediction - RED color
     for i in range(pred_sRT.shape[0]):

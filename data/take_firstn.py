@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 # 读取文件
-file_path = '/home/zhangjinyu/code_repo/pointr/data/SapienRendered/500view_shapenet_train_list.txt'
+file_path = '/home/zhangjinyu/code_repo/pointr/data/SapienRendered/500view_shapenet_test_list.txt'
 with open(file_path, 'r') as f:
     lines = f.readlines()
 
@@ -20,7 +20,7 @@ for category, records in category_dict.items():
     filtered_lines.extend(records[:50])
 
 # 将结果写入新文件
-output_path = '/home/zhangjinyu/code_repo/pointr/data/SapienRendered/500view_shapenet_first50_train_list.txt'
+output_path = '/home/zhangjinyu/code_repo/pointr/data/SapienRendered/500view_shapenet_first10_test_list.txt'
 with open(output_path, 'w') as f:
     f.writelines(filtered_lines)
 
