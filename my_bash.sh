@@ -32,12 +32,18 @@ bash ./scripts/train.sh 4 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoi
 # concat 2feature
 bash ./scripts/train.sh 4 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_concat_2feature.yaml --exp_name shapenet55_v0
 
+bash ./scripts/train.sh 7 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_concat_2feature_2xbs.yaml --exp_name shapenet55_2xbs
+
 bash ./scripts/train.sh 7 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_concat_2feature.yaml --exp_name shapenet55_mostfrequent50
 
 
 # mlp
 bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp.yaml --exp_name shapenet55_v0
 bash ./scripts/test.sh 0 --ckpts experiments/AdaPoinTr_Pose_encoder_mlp/SapienPartial_ShapeNet55_models/shapenet55_v0/ckpt-last.pth --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp.yaml --exp_name shapenet55_v0
+
+bash ./scripts/train.sh 1 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp_2xbs.yaml --exp_name shapenet55_2xbs
+
+bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp_4xbs.yaml --exp_name shapenet55_4xbs
 
 bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp.yaml --exp_name shapenet55_mostfrequent50
 

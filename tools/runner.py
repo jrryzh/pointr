@@ -900,3 +900,300 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
         msg += '%.3f \t' % value
     print_log(msg, logger=logger)
     return 
+
+def evaluate_net(args, config):
+    logger = get_logger(args.log_name)
+    print_log('Evaluate start ... ', logger = logger)
+    _, evaluate_dataloader = builder.dataset_builder(args, config.dataset.test)
+ 
+    base_model = builder.model_builder(config.model)
+    # load checkpoints
+    builder.load_model(base_model, args.ckpts, logger = logger)
+    if args.use_gpu:
+        base_model.to(args.local_rank)
+
+    #  DDP    
+    if args.distributed:
+        raise NotImplementedError()
+    
+    # Criterion
+    ChamferDisL1 = ChamferDistanceL1()
+    ChamferDisL2 = ChamferDistanceL2()
+
+    evaluate(base_model, evaluate_dataloader, ChamferDisL1, ChamferDisL2, args, config, logger=logger)
+    
+def evaluate(base_model, evaluate_dataloader, ChamferDisL1, ChamferDisL2, args, config, logger = None):
+    # TODO: 更好的添加mapping
+    # mapping = {
+    #     '02876657': 0,
+    #     '02880940': 1,
+    #     '02942699': 2,
+    #     '02946921': 3,
+    #     '03642806': 4,
+    #     '03797390': 5
+    #     }
+    mapping = categories_with_labels
+    cate_num = len(mapping)
+
+    base_model.eval()  # set model to eval mode
+
+    if config.model.NAME == "AdaPoinTr_Pose_encoder_only":
+        test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'RotatLoss', 'TransLoss', 'SizeLoss'])
+    else:
+        test_losses = AverageMeter(['SparseLossL1', 'SparseLossL2', 'DenseLossL1', 'DenseLossL2', 'RotatLoss', 'TransLoss', 'SizeLoss'])
+    test_metrics = AverageMeter(Metrics.names())
+    category_metrics = dict()
+    n_samples = len(evaluate_dataloader) # bs is 1
+
+    with torch.no_grad():
+        for idx, (taxonomy_ids, model_ids, data) in enumerate(evaluate_dataloader):
+            taxonomy_id = taxonomy_ids[0] if isinstance(taxonomy_ids[0], str) else taxonomy_ids[0].item()
+            model_id = model_ids[0]
+
+            npoints = config.dataset.test._base_.N_POINTS
+            dataset_name = config.dataset.test._base_.NAME
+            if dataset_name == 'PCN' or dataset_name == 'Projected_ShapeNet':
+                partial = data[0].cuda()
+                gt = data[1].cuda()
+
+                ret = base_model(partial)
+                coarse_points = ret[0]
+                dense_points = ret[-1]
+
+                sparse_loss_l1 =  ChamferDisL1(coarse_points, gt)
+                sparse_loss_l2 =  ChamferDisL2(coarse_points, gt)
+                dense_loss_l1 =  ChamferDisL1(dense_points, gt)
+                dense_loss_l2 =  ChamferDisL2(dense_points, gt)
+
+                test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000])
+
+                _metrics = Metrics.get(dense_points, gt, require_emd=True)
+                # test_metrics.update(_metrics)
+
+                if taxonomy_id not in category_metrics:
+                    category_metrics[taxonomy_id] = AverageMeter(Metrics.names())
+                category_metrics[taxonomy_id].update(_metrics)
+
+            elif dataset_name == 'ShapeNet' or dataset_name == "Rotated_ShapeNet":
+                gt = data.cuda()
+                choice = [torch.Tensor([1,1,1]),torch.Tensor([1,1,-1]),torch.Tensor([1,-1,1]),torch.Tensor([-1,1,1]),
+                            torch.Tensor([-1,-1,1]),torch.Tensor([-1,1,-1]), torch.Tensor([1,-1,-1]),torch.Tensor([-1,-1,-1])]
+                num_crop = int(npoints * crop_ratio[args.mode])
+                for item in choice:           
+                    partial, _ = misc.seprate_point_cloud(gt, npoints, num_crop, fixed_points = item)
+                    # NOTE: subsample the input
+                    partial = misc.fps(partial, 2048)
+                    ret = base_model(partial)
+                    coarse_points = ret[0]
+                    dense_points = ret[-1]
+
+                    sparse_loss_l1 =  ChamferDisL1(coarse_points, gt)
+                    sparse_loss_l2 =  ChamferDisL2(coarse_points, gt)
+                    dense_loss_l1 =  ChamferDisL1(dense_points, gt)
+                    dense_loss_l2 =  ChamferDisL2(dense_points, gt)
+
+                    test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000])
+
+                    _metrics = Metrics.get(dense_points ,gt)
+
+
+
+                    if taxonomy_id not in category_metrics:
+                        category_metrics[taxonomy_id] = AverageMeter(Metrics.names())
+                    category_metrics[taxonomy_id].update(_metrics)
+            elif dataset_name == 'KITTI':
+                partial = data.cuda()
+                ret = base_model(partial)
+                dense_points = ret[-1]
+                target_path = os.path.join(args.experiment_path, 'vis_result')
+                if not os.path.exists(target_path):
+                    os.mkdir(target_path)
+                misc.visualize_KITTI(
+                    os.path.join(target_path, f'{model_id}_{idx:03d}'),
+                    [partial[0].cpu(), dense_points[0].cpu()]
+                )
+                continue
+
+            elif dataset_name == "SapienPartial_ShapeNet" or dataset_name == 'PartialSpace_ShapeNet':
+                partial = data[0].cuda()
+                gt = data[1].cuda()
+                gt_rotate_mat = data[2].cuda()
+                gt_trans_mat = data[3].cuda()
+                gt_size_mat = data[4].cuda()
+                
+                ret = base_model(partial)
+                
+                gt_centroid = data[5]
+                gt_scale = data[6]
+                gt_cam_partial_pcs = data[7].cuda()
+                gt_cam_complete_pcs = data[8].cuda()
+                gt_canonical_pcs = data[9].cuda()
+                rgb_path = data[10][0]
+                
+                
+                # coarse_points = ret[0]
+                # dense_points = ret[1]
+                # pred_rotat_mat = ret[2]
+                # pred_trans_mat = ret[3]
+                # pred_size_mat = ret[4]
+                if config.model.NAME == "AdaPoinTr_Pose_encoder_only":
+                    coarse_points = ret[0]
+                    sparse_loss_l1 =  ChamferDisL1(coarse_points, gt)
+                    sparse_loss_l2 =  ChamferDisL2(coarse_points, gt)
+                else:
+                    coarse_points = ret[0]
+                    dense_points = ret[1]
+                
+                    sparse_loss_l1 =  ChamferDisL1(coarse_points, gt)
+                    sparse_loss_l2 =  ChamferDisL2(coarse_points, gt)
+                    dense_loss_l1 =  ChamferDisL1(dense_points, gt)
+                    dense_loss_l2 =  ChamferDisL2(dense_points, gt)
+
+                ############### pose matrix loss ################
+                # import ipdb; ipdb.set_trace()
+                pred_rotat_mat = ret[-3]
+                pred_trans_mat = ret[-2]
+                pred_size_mat = ret[-1]
+                gt_cate_ids = torch.tensor([mapping[tax] for tax in taxonomy_ids]).cuda()
+                index = gt_cate_ids.squeeze() + torch.arange(gt.shape[0], dtype=torch.long).cuda() * cate_num
+                pred_trans_mat = pred_trans_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
+                pred_trans_mat = torch.index_select(pred_trans_mat, 0, index).contiguous()  # bs x 3
+                pred_size_mat = pred_size_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
+                pred_size_mat = torch.index_select(pred_size_mat, 0, index).contiguous()  # bs x 3
+                pred_rotat_mat = pred_rotat_mat.view(-1, 6).contiguous() # bs, 6*nc -> bs*nc, 6
+                pred_rotat_mat = torch.index_select(pred_rotat_mat, 0, index).contiguous()  # bs x 6
+
+                loss_fn = nn.SmoothL1Loss()
+                # print('pred_rotat_mat[0].shape,', pred_rotat_mat[0].shape)
+                # print('gt_rotate_mat[0].shape,', gt_rotate_mat[0].shape)
+                # print('gt_mat.shape,', gt_rotate_mat[0][0].shape)
+                losses = torch.tensor([loss_fn(pred_rotat_mat[0], gt_mat) for gt_mat in gt_rotate_mat[0]])
+                min_idx = torch.argmin(losses)
+                rotat_loss = loss_fn(gt_rotate_mat[0][min_idx], pred_rotat_mat[0])
+                # rotat_loss = nn.SmoothL1Loss()(pred_rotat_mat, gt_rotate_mat)
+                trans_loss = nn.SmoothL1Loss()(pred_trans_mat, gt_trans_mat)
+                size_loss = nn.SmoothL1Loss()(pred_size_mat, gt_size_mat)
+                # rotat_loss = dist_utils.reduce_tensor(rotat_loss, args)
+                # trans_loss = dist_utils.reduce_tensor(trans_loss, args)
+                # size_loss = dist_utils.reduce_tensor(size_loss, args)
+                ##################################################
+                
+                if config.model.NAME == "AdaPoinTr_Pose_encoder_only":
+                    test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000])
+                else:
+                    test_losses.update([sparse_loss_l1.item() * 1000, sparse_loss_l2.item() * 1000, dense_loss_l1.item() * 1000, dense_loss_l2.item() * 1000, rotat_loss.item() * 1000, trans_loss.item() * 1000, size_loss.item() * 1000])
+                
+                # 由于输出的点可能维度比8192小，需要对gt下采样
+                if config.model.NAME == "AdaPoinTr_Pose_encoder_mlp" and dense_points.shape[1] < 8192:
+                    batch_size, num_gt, dim = gt.shape
+                    num_sampled = dense_points.shape[1]
+                    indices = torch.randperm(num_gt, device=gt.device)[:num_sampled]
+                    gt = gt[:, indices, :]
+                _metrics = Metrics.get(dense_points, gt, require_emd=True)
+                # test_metrics.update(_metrics)
+
+                if taxonomy_id not in category_metrics:
+                    category_metrics[taxonomy_id] = AverageMeter(Metrics.names())
+                category_metrics[taxonomy_id].update(_metrics)                
+                
+            else:
+                raise NotImplementedError(f'Test phase do not support {dataset_name}')
+
+            ################## NOTE: DEBUG SAVE PC ####################
+            # if (idx+1) % 200 == 0:
+            if False:
+                print_log('Test[%d/%d] Taxonomy = %s Sample = %s Losses = %s Metrics = %s' %
+                            (idx + 1, n_samples, taxonomy_id, model_id, ['%.4f' % l for l in test_losses.val()], 
+                            ['%.4f' % m for m in _metrics]), logger=logger)
+                if not os.path.exists(os.path.join(args.experiment_path, 'obj_output')):
+                    os.mkdir(os.path.join(args.experiment_path, 'obj_output'))
+                misc.save_tensor_to_obj(partial, os.path.join(args.experiment_path, 'obj_output', f'{shapenet_dict[taxonomy_id]}_{model_id}_{idx:03d}_input.obj'))
+                misc.save_tensor_to_obj(coarse_points, os.path.join(args.experiment_path, 'obj_output', f'{shapenet_dict[taxonomy_id]}_{model_id}_{idx:03d}_sparse.obj'))
+                misc.save_tensor_to_obj(dense_points, os.path.join(args.experiment_path, 'obj_output', f'{shapenet_dict[taxonomy_id]}_{model_id}_{idx:03d}_output.obj'))
+                misc.save_tensor_to_obj(gt, os.path.join(args.experiment_path, 'obj_output', f'{shapenet_dict[taxonomy_id]}_{model_id}_{idx:03d}_gt.obj'))
+                # import ipdb; ipdb.set_trace()
+            ############################################################
+            
+            ################## NOTE: DEBUG SAVE DETECTION IMG ####################
+            # if (idx+1) % 2333 == 0:
+            if True:
+                print('save new figs...')
+                ########### Preditction ############
+                pred_size_mat_np = pred_size_mat.cpu().detach().numpy().squeeze()
+                pred_rotat_mat_np = pred_rotat_mat.cpu().detach().numpy().squeeze()
+                pred_trans_mat_np = pred_trans_mat.cpu().detach().numpy().squeeze()
+                centroid_np = gt_centroid.cpu().detach().numpy().squeeze()
+                scale_np = gt_scale.cpu().detach().numpy().squeeze()
+                # sample from 10518
+
+                intrinsics = np.loadtxt('./data/SapienRendered/sapien_output/bottle/1cf98e5b6fff5471c8724d5673a063a6/intrinsic.txt')
+                img = cv2.imread(rgb_path)
+                pred_sRT = np.identity(4, dtype=float)
+                pred_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(pred_rotat_mat_np)
+                pred_sRT[0, 3] = pred_trans_mat_np[0] * scale_np + centroid_np[0]
+                pred_sRT[1, 3] = pred_trans_mat_np[1] * scale_np + centroid_np[1]
+                pred_sRT[2, 3] = pred_trans_mat_np[2] * scale_np + centroid_np[2]
+                f_sRT = scale_np * pred_size_mat_np
+                
+                if not os.path.exists(os.path.join(args.experiment_path, 'img_out')):
+                    os.mkdir(os.path.join(args.experiment_path, 'img_out'))
+                _img = img.copy()
+                draw_detections(img, os.path.join(args.experiment_path, 'img_out'), 'train_data', f'{idx:04}', intrinsics, np.expand_dims((pred_sRT), 0), np.expand_dims(f_sRT, 0), [-1]) # np.expand_dims((pred_sRT), 0), np.expand_dims(f_sRT, 0)
+                #######################################
+                
+                ############### GT ####################
+                # import ipdb; ipdb.set_trace()
+                gt_size_mat_np = gt_size_mat.cpu().detach().numpy().squeeze()
+                gt_rotate_mat_np = gt_rotate_mat.cpu().detach().numpy().squeeze()
+                gt_trans_mat_np = gt_trans_mat.cpu().detach().numpy().squeeze()
+                gt_sRT = np.identity(4, dtype=float)
+                gt_sRT[:3, :3] = convert_rotation.single_rotation_matrix_from_ortho6d(gt_rotate_mat_np[0])
+                gt_sRT[0, 3] = gt_trans_mat_np[0]* scale_np + centroid_np[0]
+                gt_sRT[1, 3] = gt_trans_mat_np[1]* scale_np + centroid_np[1]
+                gt_sRT[2, 3] = gt_trans_mat_np[2]* scale_np + centroid_np[2]
+                f_sRT = scale_np * gt_size_mat_np
+                
+                
+                draw_detections(_img, os.path.join(args.experiment_path, 'img_out'), 'train_data', f'{idx:04}_gt', intrinsics, np.expand_dims((gt_sRT), 0), np.expand_dims(f_sRT, 0), [-1]) # np.expand_dims((pred_sRT), 0), np.expand_dims(f_sRT, 0)
+                #######################################
+                
+                
+            ############################################################
+                
+            
+        if dataset_name == 'KITTI':
+            return
+        for _,v in category_metrics.items():
+            test_metrics.update(v.avg())
+        print_log('[TEST] Metrics = %s' % (['%.4f' % m for m in test_metrics.avg()]), logger=logger)
+
+     
+
+    # Print testing results
+    # shapenet_dict = json.load(open('./data/shapenet_synset_dict.json', 'r'))
+    print_log('============================ TEST RESULTS ============================',logger=logger)
+    msg = ''
+    msg += 'Taxonomy\t'
+    msg += '#Sample\t'
+    for metric in test_metrics.items:
+        msg += metric + '\t'
+    msg += '#ModelName\t'
+    print_log(msg, logger=logger)
+
+
+    for taxonomy_id in category_metrics:
+        msg = ''
+        msg += (taxonomy_id + '\t')
+        msg += (str(category_metrics[taxonomy_id].count(0)) + '\t')
+        for value in category_metrics[taxonomy_id].avg():
+            msg += '%.3f \t' % value
+        msg += shapenet_dict[taxonomy_id] + '\t'
+        print_log(msg, logger=logger)
+
+    msg = ''
+    msg += 'Overall \t\t'
+    for value in test_metrics.avg():
+        msg += '%.3f \t' % value
+    print_log(msg, logger=logger)
+    return 
+
