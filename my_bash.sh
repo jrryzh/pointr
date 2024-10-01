@@ -45,7 +45,7 @@ bash ./scripts/train.sh 1 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoi
 
 bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp_4xbs.yaml --exp_name shapenet55_4xbs
 
-bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp.yaml --exp_name shapenet55_mostfrequent50
+bash ./scripts/train.sh 2 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp_16xbs.yaml --exp_name shapenet55
 
 # encoder only
 bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_only.yaml --exp_name shapenet55_v0
