@@ -34,7 +34,9 @@ bash ./scripts/train.sh 4 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoi
 
 bash ./scripts/train.sh 7 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_concat_2feature_2xbs.yaml --exp_name shapenet55_2xbs
 
-bash ./scripts/train.sh 7 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_concat_2feature.yaml --exp_name shapenet55_mostfrequent50
+bash ./scripts/train.sh 8 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_concat_2feature.yaml --exp_name shapenet55_mostfrequent50
+
+bash ./scripts/train.sh 1 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_concat_2feature_4xbs.yaml --exp_name shapenet55_mostfrequent50
 
 
 # mlp

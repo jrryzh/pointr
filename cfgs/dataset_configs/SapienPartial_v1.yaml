@@ -1,0 +1,9 @@
+NAME: SapienPartial_ShapeNet
+DATA_PATH: ./data/SapienRendered
+OBJ_PATH: ./data/SapienRendered_objs
+CATE_NUM: 55+117
+
+GAUSSIAN_NOISE: True
+N_POINTS: 8192
+N_RENDERINGS: 500
+CARS: FALSE
