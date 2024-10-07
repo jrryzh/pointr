@@ -50,7 +50,7 @@ bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoi
 bash ./scripts/train.sh 2 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp_16xbs.yaml --exp_name shapenet55
 
 # mlp single head
-
+bash ./scripts/train.sh 5 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp_single_head_16xbs.yaml --exp_name shapenet55_16xbs
 
 # encoder only
 bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_only.yaml --exp_name shapenet55_v0

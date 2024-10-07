@@ -1029,7 +1029,6 @@ class AdaPoinTr_Pose_encoder_mlp_single_head(nn.Module):
         # pred_rotat_mat = pred_rotat_mat.view(-1, 6).contiguous() # bs, 6*nc -> bs*nc, 6
         # pred_rotat_mat = torch.index_select(pred_rotat_mat, 0, index).contiguous()  # bs x 6
         
-        import ipdb; ipdb.set_trace()
         minloss_gt_rotat_mat_list = []
         if self.rotate_loss_type == 'l1':
             loss_fn =nn.SmoothL1Loss()

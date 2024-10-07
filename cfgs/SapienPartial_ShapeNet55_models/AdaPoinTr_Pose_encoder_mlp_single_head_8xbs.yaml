@@ -31,7 +31,7 @@ dataset : {
             others: {subset: 'test'}}}
             
 model : {
-    NAME: AdaPoinTr_Pose_encoder_mlp, 
+    NAME: AdaPoinTr_Pose_encoder_mlp_single_head, 
     # NEW
     cate_num: 55,
     num_query: 512, # 512, 
