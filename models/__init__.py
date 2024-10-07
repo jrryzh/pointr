@@ -12,3 +12,4 @@ import models.AdaPoinTr_pose_concat_feature
 import models.AdaPoinTr_pose_encoder_only
 import models.AdaPoinTr_pose_encoder_mlp
 import models.AdaPoinTr_pose_concat_2feature
+import models.AdaPoinTr_Pose_encoder_mlp_single_head

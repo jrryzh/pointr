@@ -870,7 +870,7 @@ class PCTransformer_encoder(nn.Module):
 ######################################## PoinTr ########################################  
 
 @MODELS.register_module()
-class AdaPoinTr_Pose_encoder_mlp(nn.Module):
+class AdaPoinTr_Pose_encoder_mlp_single_head(nn.Module):
     def __init__(self, config, **kwargs):
         super().__init__()
         
@@ -1020,15 +1020,16 @@ class AdaPoinTr_Pose_encoder_mlp(nn.Module):
         
         # pose loss
         # TODO: 检查正确性
-        gt_cate_ids = torch.tensor([self.mapping[tax] for tax in gt_taxonomys]).cuda()
-        index = gt_cate_ids.squeeze() + torch.arange(gt.shape[0], dtype=torch.long).cuda() * self.cate_num
-        pred_trans_mat = pred_trans_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
-        pred_trans_mat = torch.index_select(pred_trans_mat, 0, index).contiguous()  # bs x 3
-        pred_size_mat = pred_size_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
-        pred_size_mat = torch.index_select(pred_size_mat, 0, index).contiguous()  # bs x 3
-        pred_rotat_mat = pred_rotat_mat.view(-1, 6).contiguous() # bs, 6*nc -> bs*nc, 6
-        pred_rotat_mat = torch.index_select(pred_rotat_mat, 0, index).contiguous()  # bs x 6
+        # gt_cate_ids = torch.tensor([self.mapping[tax] for tax in gt_taxonomys]).cuda()
+        # index = gt_cate_ids.squeeze() + torch.arange(gt.shape[0], dtype=torch.long).cuda() * self.cate_num
+        # pred_trans_mat = pred_trans_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
+        # pred_trans_mat = torch.index_select(pred_trans_mat, 0, index).contiguous()  # bs x 3
+        # pred_size_mat = pred_size_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
+        # pred_size_mat = torch.index_select(pred_size_mat, 0, index).contiguous()  # bs x 3
+        # pred_rotat_mat = pred_rotat_mat.view(-1, 6).contiguous() # bs, 6*nc -> bs*nc, 6
+        # pred_rotat_mat = torch.index_select(pred_rotat_mat, 0, index).contiguous()  # bs x 6
         
+        import ipdb; ipdb.set_trace()
         minloss_gt_rotat_mat_list = []
         if self.rotate_loss_type == 'l1':
             loss_fn =nn.SmoothL1Loss()
