@@ -1,0 +1,11 @@
+./data/SapienRendered/sapien_rgb_output/can/a087f6b5ea424ccc785f06f424b9d06
+./data/SapienRendered/sapien_rgb_output/can/100c5aee62f1c9b9f54f8416555967
+./data/SapienRendered/sapien_rgb_output/can/17ef524ca4e382dd9d2ad28276314523
+./data/SapienRendered/sapien_rgb_output/can/baaa4b9538caa7f06e20028ed3cb196e
+./data/SapienRendered/sapien_rgb_output/laptop/16c49793f432cd4b33e4e0fe8cce118e
+./data/SapienRendered/sapien_rgb_output/laptop/2134ad3fc25a6284193a4c984002ed32
+./data/SapienRendered/sapien_rgb_output/laptop/6103fd8c11413be975e42c1faa1148bb
+./data/SapienRendered/sapien_rgb_output/laptop/d88e4093a73064b6b44d9812f259e403
+./data/SapienRendered/sapien_rgb_output/laptop/3909e96930cb1e32a4f2e5eab55eddea
+./data/SapienRendered/sapien_rgb_output/laptop/d9acee6657134387c664c3d4e2d59341
+./data/SapienRendered/sapien_rgb_output/laptop/342150823878f1ec9aeacfc2a1a52243

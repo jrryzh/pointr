@@ -40,7 +40,7 @@ bash ./scripts/train.sh 1 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoi
 
 
 # mlp
-bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp.yaml --exp_name shapenet55_v0
+bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp.yaml --exp_name testcode
 bash ./scripts/test.sh 0 --ckpts experiments/AdaPoinTr_Pose_encoder_mlp/SapienPartial_ShapeNet55_models/shapenet55_v0/ckpt-last.pth --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp.yaml --exp_name shapenet55_v0
 
 bash ./scripts/train.sh 1 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp_2xbs.yaml --exp_name shapenet55_2xbs
@@ -51,6 +51,9 @@ bash ./scripts/train.sh 2 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoi
 
 # mlp single head
 bash ./scripts/train.sh 5 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_mlp_single_head_16xbs.yaml --exp_name shapenet55_16xbs
+
+# dino encoder mlp
+bash ./scripts/train.sh 6 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_dino_encoder_mlp_8xbs.yaml --exp_name shapenet55_8xbs
 
 # encoder only
 bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_only.yaml --exp_name shapenet55_v0

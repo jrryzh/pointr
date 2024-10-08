@@ -9,3 +9,4 @@ import datasets.Rotated_ShapeNet55Dataset
 import datasets.PartialSpace_ShapeNet55Dataset
 import datasets.SapienPartial_ShapeNet55Dataset
 import datasets.SapienPartial_NocsDataset
+import datasets.SapienPartialRGBD_ShapeNet55Dataset

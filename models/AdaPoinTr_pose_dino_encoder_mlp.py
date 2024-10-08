@@ -16,6 +16,13 @@ from utils import convert_rotation
 
 from utils.commons import categories_with_labels
 
+import torch
+import numpy as np
+from PIL import Image
+import os
+import torch.nn.functional as F
+
+
 
 class SelfAttnBlockApi(nn.Module):
     r'''
@@ -767,7 +774,7 @@ class PCTransformer_dino_encoder(nn.Module):
     def __init__(self, config):
         super().__init__()
         ########## NEW: 添加dino feature提取器#########
-        self.dinov2_vits14_lc = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14_lc')
+        self.dinov2_vits14 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
         ##############################################
         
         ## NEW: 提前引出global feature###
@@ -837,6 +844,11 @@ class PCTransformer_dino_encoder(nn.Module):
             nn.Sigmoid()
         )
 
+        # NEW: 设置attention计算需要的函数
+        # NEW: Cross-Attention between x + pe and dino_feature
+        self.cross_attn = nn.MultiheadAttention(embed_dim=encoder_config.embed_dim, num_heads=8, batch_first=True)
+        self.attn_norm = nn.LayerNorm(encoder_config.embed_dim)
+
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -847,17 +859,170 @@ class PCTransformer_dino_encoder(nn.Module):
         elif isinstance(m, nn.LayerNorm):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
+            
+    def batch_crop_and_resize(self, rgb_batch, mask_batch, output_size=(224, 224), padding=10):
+        """
+        高效批量裁剪和调整大小 RGB 图像，根据掩码。
 
-    def forward(self, xyz, rgb):
+        参数:
+        - rgb_batch: Tensor, 形状 [batch_size, height, width, 3], dtype=torch.uint8
+        - mask_batch: Tensor, 形状 [batch_size, height, width], dtype=torch.uint8
+        - output_size: tuple, 输出图像的大小 (height, width)
+        - padding: int, 边界框的填充像素数
+
+        返回:
+        - resized_rgb: Tensor, 形状 [batch_size, 3, output_size[0], output_size[1]]
+        """
+        # 确保输入的 batch 是正确的
+        # 这里假设 rgb_batch 和 mask_batch 已经传入函数，无需重新赋值
+        device = rgb_batch.device
+        batch_size, height, width, channels = rgb_batch.shape
+
+        # 确保掩码为二值
+        mask_batch = (mask_batch == 0).float()  # 假设 1 表示前景
+
+        # 计算掩码在 y 轴和 x 轴的投影
+        mask_any_y = mask_batch.any(dim=2)  # [batch_size, height]
+        mask_any_x = mask_batch.any(dim=1)  # [batch_size, width]
+
+        # 计算 y_min 和 y_max
+        y_min = mask_any_y.float().argmax(dim=1)  # [batch_size]
+        y_max = mask_any_y.flip(dims=[1]).float().argmax(dim=1)
+        y_max = height - 1 - y_max  # 反转索引以获得正确的 y_max
+
+        # 计算 x_min 和 x_max
+        x_min = mask_any_x.float().argmax(dim=1)  # [batch_size]
+        x_max = mask_any_x.flip(dims=[1]).float().argmax(dim=1)
+        x_max = width - 1 - x_max  # 反转索引以获得正确的 x_max
+
+        # 处理空掩码的情况：如果掩码全为零，则使用中心裁剪
+        mask_sum = mask_batch.view(batch_size, -1).sum(dim=1)
+        empty_mask = (mask_sum == 0)
+
+        # 定义中心裁剪的边界
+        center_crop_h, center_crop_w = output_size
+        y_center = height // 2
+        x_center = width // 2
+
+        # 将中心裁剪边界转换为张量
+        y_center_tensor = torch.full_like(y_min, y_center, dtype=y_min.dtype, device=device)
+        x_center_tensor = torch.full_like(x_min, x_center, dtype=x_min.dtype, device=device)
+
+        # 使用 torch.clamp 进行裁剪，确保传递的是张量
+        y_min_center = (y_center_tensor - center_crop_h // 2).clamp(0, height - 1)
+        y_max_center = (y_center_tensor + center_crop_h // 2).clamp(0, height - 1)
+        x_min_center = (x_center_tensor - center_crop_w // 2).clamp(0, width - 1)
+        x_max_center = (x_center_tensor + center_crop_w // 2).clamp(0, width - 1)
+
+        # 将中心裁剪边界应用到空掩码样本
+        y_min[empty_mask] = y_min_center[empty_mask]
+        y_max[empty_mask] = y_max_center[empty_mask]
+        x_min[empty_mask] = x_min_center[empty_mask]
+        x_max[empty_mask] = x_max_center[empty_mask]
+
+        # 添加填充
+        y_min = (y_min - padding).clamp(0, height - 1)
+        y_max = (y_max + padding).clamp(0, height - 1)
+        x_min = (x_min - padding).clamp(0, width - 1)
+        x_max = (x_max + padding).clamp(0, width - 1)
+
+        # 计算裁剪区域的宽度和高度
+        box_width = x_max - x_min + 1  # [batch_size]
+        box_height = y_max - y_min + 1  # [batch_size]
+
+        # 防止宽度和高度为零
+        box_width = torch.clamp(box_width, min=1)
+        box_height = torch.clamp(box_height, min=1)
+
+        # 计算裁剪区域的中心点（归一化坐标）
+        center_x = (x_min + x_max) / 2 / (width - 1) * 2 - 1  # [batch_size]
+        center_y = (y_min + y_max) / 2 / (height - 1) * 2 - 1  # [batch_size]
+
+        # 计算裁剪区域的归一化宽度和高度
+        norm_w = box_width / (width - 1) * 2  # [batch_size]
+        norm_h = box_height / (height - 1) * 2  # [batch_size]
+
+        # 创建裁剪网格
+        grid_y, grid_x = torch.meshgrid(
+            torch.linspace(-1, 1, steps=output_size[0], device=device),
+            torch.linspace(-1, 1, steps=output_size[1], device=device)
+        )
+        grid = torch.stack((grid_x, grid_y), dim=2)  # [H, W, 2]
+        grid = grid.unsqueeze(0).repeat(batch_size, 1, 1, 1)  # [batch_size, H, W, 2]
+
+        # 缩放网格
+        norm_wh = torch.stack((norm_w, norm_h), dim=1).view(batch_size, 1, 1, 2)  # [batch_size, 1, 1, 2]
+        grid = grid * norm_wh / 2  # 由于网格范围为 [-1, 1]
+
+        # 平移网格到中心点
+        center_xy = torch.stack((center_x, center_y), dim=1).view(batch_size, 1, 1, 2)  # [batch_size, 1, 1, 2]
+        grid = grid + center_xy
+
+        # 限制网格范围在 [-1, 1]
+        grid = grid.clamp(-1, 1)
+
+        # 转换 rgb_batch 形状为 [batch_size, 3, height, width] 并归一化到 [0, 1]
+        rgb_batch = rgb_batch.permute(0, 3, 1, 2).float() / 255.0  # [B, 3, H, W]
+
+        # 使用 grid_sample 进行裁剪和缩放
+        resized_rgb = F.grid_sample(rgb_batch, grid, mode='bilinear', padding_mode='zeros', align_corners=True)
+
+        return resized_rgb
+    
+    def save_resized_images(self, resized_rgb, save_dir='/home/zhangjinyu/code_repo/pointr/tmp'):
+        """
+        保存裁剪和调整大小后的 RGB 图像。
+
+        参数:
+        - resized_rgb: Tensor, 形状 [batch_size, 3, H, W], 归一化到 [0, 1]
+        - save_dir: str, 保存图像的目录
+        """
+        os.makedirs(save_dir, exist_ok=True)
+        resized_rgb = resized_rgb.cpu()  # 转移到 CPU
+        for i in range(resized_rgb.shape[0]):
+            img = resized_rgb[i].permute(1, 2, 0).numpy()  # [H, W, 3]
+            img = (img * 255).astype(np.uint8)
+            pil_image = Image.fromarray(img)
+            pil_image.save(os.path.join(save_dir, f"resized_rgb_{i}.png"))
+            print(f"Saved resized_rgb_{i}.png")
+
+    def forward(self, xyz, rgb, mask):
         bs = xyz.size(0)
         coor, f = self.grouper(xyz, self.center_num) # b n c
         pe =  self.pos_embed(coor)
-        x = self.input_proj(f)
+        x = self.input_proj(f) # b 384
         
-        dino_feature = self.dinov2_vits14_lc(rgb) # b 384
-        
+        resized_rgb = self.batch_crop_and_resize(rgb, mask, output_size=(224, 224), padding=10)
+            
+        # 利用dino获取rgb feature 与 x feature计算attention
+        dino_feature = self.dinov2_vits14(resized_rgb) # b embed_dim
 
-        x = self.encoder(x + pe, coor) # b n c # 这里encoder就是self attention
+        ### x + pe 与 dino_feature 进行attention 并归一化 ###
+        
+        ################################## 方法一 ###############
+        # x + pe: (B, N, C)
+        x_pe = x + pe  # Shape: (B, N, C)
+
+        # dino_feature: (B, C) -> (B, 1, C)
+        dino_feat = dino_feature.unsqueeze(1)  # Shape: (B, 1, C)
+
+        # Perform cross-attention: Query=x_pe, Key=dino_feat, Value=dino_feat
+        attn_output, attn_weights = self.cross_attn(query=x_pe, key=dino_feat, value=dino_feat)  # attn_output: (B, N, C)
+
+        # Add the attention output to x_pe (residual connection)
+        x_pe = x_pe + attn_output  # Shape: (B, N, C)
+
+        # Apply Layer Normalization
+        x_pe = self.attn_norm(x_pe)  # Shape: (B, N, C)
+
+        # Update x to be used in the encoder
+        x = x_pe  # Shape: (B, N, C)
+        
+        ###########################################################
+
+        # Continue with the existing encoder
+        x = self.encoder(x, coor) # b n c # 这里encoder就是self attention
+        # x = self.encoder(x + pe, coor) # b n c # 这里encoder就是self attention
         global_feature = self.increase_dim(x) # B 1024 N # 提升到global_feature_dim
         global_feature = torch.max(global_feature, dim=1)[0] # B 1024 # max后变为1024维
 
@@ -874,6 +1039,48 @@ class PCTransformer_dino_encoder(nn.Module):
         coarse = torch.gather(coarse, 1, idx[:,:self.num_query].expand(-1, -1, coarse.size(-1))) # [48, 512, 3]
         
         return coarse, global_feature
+    
+    # 用于debug
+    def save_masks(self, mask_batch, save_dir='/home/zhangjinyu/code_repo/pointr/tmp', batch_indices=None):
+        """
+        保存批量掩码为图像文件。
+
+        参数:
+        - mask_batch: Tensor, 形状 [batch_size, height, width], dtype=torch.uint8 或 torch.bool
+        - save_dir: str, 保存掩码图像的目录
+        - batch_indices: list 或 None, 指定保存哪些样本。如果为 None，则保存全部
+        """
+        # 确保保存目录存在
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # 将掩码转移到 CPU 并转换为 NumPy 数组
+        mask_cpu = mask_batch.cpu().numpy()
+        
+        # 处理每个样本
+        for i in range(mask_cpu.shape[0]):
+            if batch_indices is not None and i not in batch_indices:
+                continue  # 跳过未指定的样本
+            
+            mask = mask_cpu[i]  # [height, width]
+            
+            # 确保掩码是二值的
+            unique_values = np.unique(mask)
+            if not np.array_equal(unique_values, [0, 1]) and not np.array_equal(unique_values, [0]) and not np.array_equal(unique_values, [1]):
+                raise ValueError(f"Mask at index {i} contains values other than 0 and 1: {unique_values}")
+            
+            # 将掩码从 [0, 1] 转换为 [0, 255] 以便可视化
+            mask_image = (mask * 255).astype(np.uint8)
+            
+            # 创建 PIL Image 对象
+            pil_image = Image.fromarray(mask_image, mode='L')  # 'L' 表示灰度图
+            
+            # 定义保存路径
+            filename = f"mask_{i}.png"
+            save_path = os.path.join(save_dir, filename)
+            
+            # 保存图像
+            pil_image.save(save_path)
+            print(f"Saved mask {i} to {save_path}")
 
 ######################################## PoinTr ########################################  
 
@@ -1020,7 +1227,6 @@ class AdaPoinTr_Pose_dino_encoder_mlp(nn.Module):
         
         # pred_coarse, denoised_coarse, denoised_fine, pred_fine, pred_rotat_mat, pred_trans_mat, pred_size_mat = ret
         pred_coarse, pred_dense, pred_rotat_mat, pred_trans_mat, pred_size_mat = ret
-        # import ipdb; ipdb.set_trace()
 
         # recon loss
         loss_dense = self.loss_func(pred_dense, gt)
@@ -1085,8 +1291,8 @@ class AdaPoinTr_Pose_dino_encoder_mlp(nn.Module):
 
         return loss_coarse, loss_dense, loss_rotat, loss_trans, loss_size
 
-    def forward(self, xyz):
-        coarse_point_cloud, global_feature = self.base_model(xyz) # B M C and B M 3
+    def forward(self, xyz, rgb, mask):
+        coarse_point_cloud, global_feature = self.base_model(xyz, rgb, mask) # B M C and B M 3
     
         ############## 添加mlp 预测完整点云 ############
         B, M ,_ = coarse_point_cloud.shape
