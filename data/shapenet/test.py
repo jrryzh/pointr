@@ -1,7 +1,7 @@
 import os
 import random
 
-sapien_dir = "./data/SapienRendered/sapien_rgb_output"
+sapien_dir = "./data/shapenet/views"
 
 category_list = [d for d in os.listdir(sapien_dir) if os.path.isdir(os.path.join(sapien_dir, d))]
 
@@ -29,18 +29,18 @@ for idx, path in enumerate(result_list):
         train_list.append(path)
     
 # 保存result_list到文件
-train_list_path = os.path.join("./data/SapienRendered", "500view_rgb_shapenet_train_list.txt")
+train_list_path = os.path.join("./data/shapenet", "500view_rgbd_shapenet_train_list.txt")
 with open(train_list_path, 'w') as f:
     for item in train_list:
         f.write(f"{item}\n")
 
-test_list_path = os.path.join("./data/SapienRendered", "500view_rgb_shapenet_test_list.txt")
+test_list_path = os.path.join("./data/shapenet", "500view_rgbd_shapenet_test_list.txt")
 with open(test_list_path, 'w') as f:
     for item in test_list:
         f.write(f"{item}\n")
 
 # 保存fail_list到文件
-fail_list_path = os.path.join("./data/SapienRendered", "500view_rgb_shapenet_fail_list.txt")
+fail_list_path = os.path.join("./data/shapenet", "500view_rgb_shapenet_fail_list.txt")
 with open(fail_list_path, 'w') as f:
     for item in fail_list:
         f.write(f"{item}\n")

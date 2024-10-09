@@ -1,8 +1,8 @@
 NAME: SapienPartialRGBD_ShapeNet
 # DATA_PATH: /home/fudan248/zhangjinyu/code_repo/PoinTr/data/SapienRendered
 # OBJ_PATH: /home/fudan248/zhangjinyu/code_repo/PoinTr/data/ShapeNet55-34/shapenet_pc/
-DATA_PATH: ./data/SapienRendered
-OBJ_PATH: ./data/SapienRendered_objs
+DATA_PATH: ./data/shapenet
+OBJ_PATH: ./data/shapenet/objs
 CATE_NUM: 55
 
 GAUSSIAN_NOISE: True

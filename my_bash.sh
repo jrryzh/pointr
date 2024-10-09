@@ -54,6 +54,8 @@ bash ./scripts/train.sh 5 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoi
 
 # dino encoder mlp
 bash ./scripts/train.sh 6 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_dino_encoder_mlp_8xbs.yaml --exp_name shapenet55_8xbs
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 bash ./scripts/dist_train.sh 8 13232 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_dino_encoder_mlp_8xbs.yaml --exp_name testcode
+
 
 # encoder only
 bash ./scripts/train.sh 0 --config ./cfgs/SapienPartial_ShapeNet55_models/AdaPoinTr_Pose_encoder_only.yaml --exp_name shapenet55_v0
