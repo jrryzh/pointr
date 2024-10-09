@@ -160,7 +160,7 @@ results/
 # data/SapienRendered/
 experiments
 # data/SapienRendered
-data/SapienRendered_objs
+# data/SapienRendered_objs
 data/objaverse/normalized_data
 data/objaverse/raw_data
 
