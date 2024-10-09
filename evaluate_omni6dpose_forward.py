@@ -85,14 +85,31 @@ if __name__ == '__main__':
     all_pred_size = []
 
     for i, test_batch in enumerate(tqdm(dataloader, desc="Pose Inference")):
-        # batch_sample = process_batch(
-        #     batch_sample=test_batch, 
-        #     device=cfg.device
-        # )
+        # dict_keys(['pcl_in', 'rotation', 'translation', 'affine', 'sym_info', 'handle_visibility', 'roi_rgb', 'roi_rgb_', 'roi_xs', 'roi_ys', 'roi_center_dir', 
+        # 'intrinsics', 'bbox_side_len', 'pose', 'path', 'class_label', 'class_name', 'object_name'])
+        batch_sample = process_batch(
+            batch_sample=test_batch, 
+            device=omni_cfg.device
+        )
 
-        # # 使用您的模型进行推理
-        # with torch.no_grad():
-        #     ret = base_model(batch_sample)
+        # dict_keys(['pts', 'pts_color', 'sym_info', 'roi_rgb', 'roi_xs', 'roi_ys', 'roi_center_dir', 'gt_pose', 'zero_mean_pts', 'zero_mean_gt_pose', 'pts_center'])
+        partial, gt_rgb = batch_sample['pts'], batch_sample['roi_rgb']
+        with torch.no_grad():
+            # "AdaPoinTr_Pose_dino_encoder_mlp":
+            ret = base_model(partial, gt_rgb, None)
+            
+            pred_rotat_mat = ret[-3]
+            pred_trans_mat = ret[-2]
+            pred_size_mat = ret[-1]
+        
+            gt_cate_ids = torch.tensor([mapping[tax] for tax in taxonomy_ids]).cuda()
+            index = gt_cate_ids.squeeze() + torch.arange(gt.shape[0], dtype=torch.long).cuda() * cate_num
+            pred_trans_mat = pred_trans_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
+            pred_trans_mat = torch.index_select(pred_trans_mat, 0, index).contiguous()  # bs x 3
+            pred_size_mat = pred_size_mat.view(-1, 3).contiguous() # bs, 3*nc -> bs*nc, 3
+            pred_size_mat = torch.index_select(pred_size_mat, 0, index).contiguous()  # bs x 3
+            pred_rotat_mat = pred_rotat_mat.view(-1, 6).contiguous() # bs, 6*nc -> bs*nc, 6
+            pred_rotat_mat = torch.index_select(pred_rotat_mat, 0, index).contiguous()  # bs x 6
 
         # # 假设 outputs 包含 'pose_matrix' 和 'size_matrix'
         # pred_pose = outputs['pose_matrix'].cpu()  # [batch_size, 4, 4]
@@ -103,7 +120,6 @@ if __name__ == '__main__':
 
         # if i % 4 == 3:
         #     gc.collect()
-        print(test_batch.keys())
     
     # 保存预测结果
     pickle.dump((all_pred_pose, all_pred_size), open(save_path, 'wb'))

@@ -992,7 +992,10 @@ class PCTransformer_dino_encoder(nn.Module):
         pe =  self.pos_embed(coor)
         x = self.input_proj(f) # b 384
         
-        resized_rgb = self.batch_crop_and_resize(rgb, mask, output_size=(224, 224), padding=10)
+        if mask is None:
+            resized_rgb = rgb
+        else:
+            resized_rgb = self.batch_crop_and_resize(rgb, mask, output_size=(224, 224), padding=10)
             
         # 利用dino获取rgb feature 与 x feature计算attention
         dino_feature = self.dinov2_vits14(resized_rgb) # b embed_dim
