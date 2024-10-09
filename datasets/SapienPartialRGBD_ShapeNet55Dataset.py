@@ -16,7 +16,7 @@ from utils.utils_pose import save_to_obj_pts, add_gaussian_noise
 import cv2
 
 ##################### 调节是否debug 缩减长度 #########################
-DEBUG = False
+DEBUG = True
 ###################################################################
 
 

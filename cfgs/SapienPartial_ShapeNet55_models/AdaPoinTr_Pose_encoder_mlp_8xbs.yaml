@@ -75,7 +75,7 @@ model : {
     }
 }
   
-total_bs : 384 # 48
+total_bs : 12 # 48
 step_per_update : 1
 max_epoch : 600
 
